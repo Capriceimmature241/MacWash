@@ -166,14 +166,12 @@ opt_broken_configs() {
 opt_dock_refresh() {
     if [[ "${MACWASH_DRY_RUN:-0}" != "1" ]]; then
         # Remove icon caches that cause broken/blank Dock icons
-        safe_remove "$HOME/Library/Caches/com.apple.dock.iconcache" true
-        safe_remove "$HOME/Library/Caches/com.apple.iconservices.store" true
-        # Restart Dock only if not running in a terminal spawned by Dock
-        # Use nohup + disown so the restart doesn't kill the current shell
-        ( nohup killall Dock >/dev/null 2>&1 & ) || true
+        # Dock picks up new cache automatically — no restart needed
+        safe_remove "$HOME/Library/Caches/com.apple.dock.iconcache" true 2>/dev/null || true
+        safe_remove "$HOME/Library/Caches/com.apple.iconservices.store" true 2>/dev/null || true
     fi
     opt_msg "Dock icon cache cleared"
-    opt_msg "Dock refresh queued"
+    opt_msg "Dock will refresh on next login"
 }
 
 # ── 10. Memory optimization ───────────────────────────────────────────────────
