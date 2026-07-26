@@ -61,10 +61,14 @@ _disk_stats() {
 }
 
 _uptime_str() {
-    local boot; boot=$(sysctl -n kern.boottime 2>/dev/null | awk -F'[=,}]' '{print $2}' | tr -d ' ' || echo 0)
+    # Extract only the sec value safely using sed — works on all macOS versions
+    # kern.boottime format: { sec = 1784828646, usec = 736236 } ...
+    local boot
+    boot=$(sysctl -n kern.boottime 2>/dev/null | sed -n 's/.*sec = \([0-9]*\),.*/\1/p' | tr -d '[:space:]')
     [[ "$boot" =~ ^[0-9]+$ ]] || boot=0
     local now; now=$(get_epoch_seconds)
     local elapsed=$(( now - boot ))
+    [[ $elapsed -lt 0 ]] && elapsed=0
     local days=$(( elapsed / 86400 ))
     local hours=$(( (elapsed % 86400) / 3600 ))
     printf '%dd %dh' "$days" "$hours"

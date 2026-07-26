@@ -57,7 +57,7 @@ curl -fsSL https://raw.githubusercontent.com/toolka/MacWash/main/install.sh | ba
 **Install via Homebrew tap**
 
 ```bash
-brew tap macwash/homebrew
+brew tap toolka/macwash
 brew install macwash
 ```
 

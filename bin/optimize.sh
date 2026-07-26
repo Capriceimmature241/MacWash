@@ -33,10 +33,12 @@ echo ""
 mem_total=$(sysctl -n hw.memsize 2>/dev/null || echo 0)
 mem_total_gb=$((mem_total / 1024 / 1024 / 1024))
 disk_free_kb=$(get_free_space_kb 2>/dev/null || echo 0)
-boot_sec=$(sysctl -n kern.boottime 2>/dev/null | awk -F'[=,}]' '{print $2}' | tr -d ' ' || echo 0)
+boot_sec=$(sysctl -n kern.boottime 2>/dev/null | sed -n 's/.*sec = \([0-9]*\),.*/\1/p' | tr -d '[:space:]')
 [[ "$boot_sec" =~ ^[0-9]+$ ]] || boot_sec=0
 now_sec=$(get_epoch_seconds)
-uptime_days=$(( (now_sec - boot_sec) / 86400 ))
+elapsed_sec=$(( now_sec - boot_sec ))
+[[ $elapsed_sec -lt 0 ]] && elapsed_sec=0
+uptime_days=$(( elapsed_sec / 86400 ))
 echo -e "  ${ICON_ADMIN} System  ${mem_total_gb}GB RAM  |  $(bytes_to_human_kb "$disk_free_kb") free  |  Uptime ${uptime_days}d"
 echo ""
 
