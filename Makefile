@@ -1,5 +1,6 @@
 .PHONY: all check format test install clean
 
+# MacWash v1.0.2 — Clean, optimize and speed up your Mac
 INSTALL_DIR ?= /usr/local/bin
 
 all: check

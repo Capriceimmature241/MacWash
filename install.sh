@@ -19,7 +19,7 @@ log_err()  { echo -e "${RED}✗${NC} $1"; exit 1; }
 [[ "$OSTYPE" == darwin* ]] || log_err "MacWash requires macOS."
 
 echo ""
-echo "  Installing MacWash..."
+echo "  Installing MacWash v1.0.2..."
 echo ""
 
 # ── Fetch source ──────────────────────────────────────────────────────────────
