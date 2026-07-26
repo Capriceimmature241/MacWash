@@ -3,7 +3,7 @@
 
 set -euo pipefail
 
-_purge_leftover_paths() {
+_macwash_leftover_paths() {
     local bundle_id="$1" app_name="$2"
     local -a paths=()
     local lc_name; lc_name=$(printf '%s' "$app_name" | tr '[:upper:]' '[:lower:]')
@@ -99,7 +99,7 @@ uninstall_app() {
                 log_operation "uninstall" "REMOVED" "$leftover" "leftover"
             fi
         fi
-    done < <(_purge_leftover_paths "$bundle_id" "$app_name")
+    done < <(_macwash_leftover_paths "$bundle_id" "$app_name")
 
     if [[ "$leftover_count" -gt 0 ]]; then
         echo -e "    ${GREEN}${ICON_SUCCESS}${NC} Cleaned $leftover_count leftover(s) ($(bytes_to_human_kb "$leftover_kb"))"

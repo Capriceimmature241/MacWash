@@ -5,15 +5,15 @@ set -euo pipefail
 [[ -n "${MACWASH_COMMON_LOADED:-}" ]] && return 0
 readonly MACWASH_COMMON_LOADED=1
 
-_PURGE_CORE_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+_MACWASH_CORE_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
-source "$_PURGE_CORE_DIR/base.sh"
-source "$_PURGE_CORE_DIR/ui.sh"
-source "$_PURGE_CORE_DIR/protection.sh"
-source "$_PURGE_CORE_DIR/file_ops.sh"
-source "$_PURGE_CORE_DIR/log.sh"
-source "$_PURGE_CORE_DIR/help.sh"
-source "$_PURGE_CORE_DIR/sudo.sh"
+source "$_MACWASH_CORE_DIR/base.sh"
+source "$_MACWASH_CORE_DIR/ui.sh"
+source "$_MACWASH_CORE_DIR/protection.sh"
+source "$_MACWASH_CORE_DIR/file_ops.sh"
+source "$_MACWASH_CORE_DIR/log.sh"
+source "$_MACWASH_CORE_DIR/help.sh"
+source "$_MACWASH_CORE_DIR/sudo.sh"
 
 load_whitelist 2>/dev/null || true
 
@@ -40,7 +40,7 @@ print_summary_block() {
 }
 
 # ── path identity ─────────────────────────────────────────────────────────────
-purge_path_identity() {
+macwash_path_identity() {
     local p="${1%/}"; [[ -z "$p" ]] && p="$1"
     if [[ -e "$p" || -L "$p" ]]; then
         local id; id=$(stat -L -f '%d:%i' "$p" 2>/dev/null || true)

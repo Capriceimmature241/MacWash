@@ -5,8 +5,8 @@ set -euo pipefail
 [[ -n "${MACWASH_LOG_LOADED:-}" ]] && return 0
 readonly MACWASH_LOG_LOADED=1
 
-_PURGE_CORE_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-[[ -z "${MACWASH_BASE_LOADED:-}" ]] && source "$_PURGE_CORE_DIR/base.sh"
+_MACWASH_CORE_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+[[ -z "${MACWASH_BASE_LOADED:-}" ]] && source "$_MACWASH_CORE_DIR/base.sh"
 
 readonly MACWASH_OPS_LOG="${HOME}/Library/Logs/macwash/operations.log"
 

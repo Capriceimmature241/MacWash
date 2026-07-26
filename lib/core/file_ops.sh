@@ -5,11 +5,11 @@ set -euo pipefail
 [[ -n "${MACWASH_FILE_OPS_LOADED:-}" ]] && return 0
 readonly MACWASH_FILE_OPS_LOADED=1
 
-_PURGE_CORE_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-[[ -z "${MACWASH_BASE_LOADED:-}" ]] && source "$_PURGE_CORE_DIR/base.sh"
+_MACWASH_CORE_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+[[ -z "${MACWASH_BASE_LOADED:-}" ]] && source "$_MACWASH_CORE_DIR/base.sh"
 
 # ── Critical path deny-list ──────────────────────────────────────────────────
-_purge_is_critical_path() {
+_macwash_is_critical_path() {
     local p="$1"
     case "$p" in
         / | /bin | /bin/* | /sbin | /sbin/* | /usr | /usr/bin | /usr/bin/* \
@@ -34,16 +34,16 @@ _purge_is_critical_path() {
 # ── Path validator ────────────────────────────────────────────────────────────
 validate_path_for_deletion() {
     local p="$1"
-    [[ -z "$p" ]]         && { echo "PURGE: empty path" >&2; return 1; }
-    [[ "$p" != /* ]]      && { echo "PURGE: not absolute: $p" >&2; return 1; }
-    [[ "$p" =~ (^|/)\.\.(\/|$) ]] && { echo "PURGE: traversal: $p" >&2; return 1; }
-    [[ "$p" =~ [[:cntrl:]] ]] && { echo "PURGE: control chars: $p" >&2; return 1; }
+    [[ -z "$p" ]]         && { echo "MacWash: empty path" >&2; return 1; }
+    [[ "$p" != /* ]]      && { echo "MacWash: not absolute: $p" >&2; return 1; }
+    [[ "$p" =~ (^|/)\.\.(\/|$) ]] && { echo "MacWash: traversal: $p" >&2; return 1; }
+    [[ "$p" =~ [[:cntrl:]] ]] && { echo "MacWash: control chars: $p" >&2; return 1; }
 
     # Symlink leaf resolution
     if [[ -L "$p" ]]; then
         local target; target=$(readlink "$p" 2>/dev/null) || return 1
         [[ "$target" != /* ]] && target="$(dirname "$p")/$target"
-        _purge_is_critical_path "$target" && { echo "PURGE: symlink -> critical: $p" >&2; return 1; }
+        _macwash_is_critical_path "$target" && { echo "MacWash: symlink -> critical: $p" >&2; return 1; }
     fi
 
     # Allow known safe subtrees under /private before the deny check
@@ -53,11 +53,11 @@ validate_path_for_deletion() {
             return 0 ;;
     esac
 
-    _purge_is_critical_path "$p" && { echo "PURGE: critical path: $p" >&2; return 1; }
+    _macwash_is_critical_path "$p" && { echo "MacWash: critical path: $p" >&2; return 1; }
 
     # App protection check (if loaded)
     if declare -f should_protect_path >/dev/null 2>&1 && should_protect_path "$p"; then
-        [[ "${MACWASH_DEBUG:-0}" == "1" ]] && echo "PURGE: protected: $p" >&2
+        [[ "${MACWASH_DEBUG:-0}" == "1" ]] && echo "MacWash: protected: $p" >&2
         return 1
     fi
     return 0
@@ -96,7 +96,7 @@ safe_sudo_remove() {
     local path="$1"
     validate_path_for_deletion "$path" || return 1
     [[ -e "$path" ]] || return 0
-    [[ -L "$path" ]] && { echo "PURGE: refuse sudo remove symlink: $path" >&2; return 1; }
+    [[ -L "$path" ]] && { echo "MacWash: refuse sudo remove symlink: $path" >&2; return 1; }
 
     if [[ "${MACWASH_DRY_RUN:-0}" == "1" ]]; then
         [[ "${MACWASH_DEBUG:-0}" == "1" ]] && echo "  [DRY RUN] Would sudo remove: $path" >&2

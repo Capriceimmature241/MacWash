@@ -5,8 +5,8 @@ set -euo pipefail
 [[ -n "${MACWASH_PROTECTION_LOADED:-}" ]] && return 0
 readonly MACWASH_PROTECTION_LOADED=1
 
-_PURGE_CORE_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-[[ -z "${MACWASH_BASE_LOADED:-}" ]] && source "$_PURGE_CORE_DIR/base.sh"
+_MACWASH_CORE_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+[[ -z "${MACWASH_BASE_LOADED:-}" ]] && source "$_MACWASH_CORE_DIR/base.sh"
 
 # ── System-critical bundle IDs (never uninstall) ─────────────────────────────
 readonly -a SYSTEM_CRITICAL_BUNDLES=(

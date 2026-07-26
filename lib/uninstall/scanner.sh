@@ -3,7 +3,7 @@
 
 set -euo pipefail
 
-_purge_app_dirs() {
+_macwash_app_dirs() {
     local -a dirs=("/Applications" "$HOME/Applications")
     local vol
     for vol in /Volumes/*/Applications; do
@@ -14,14 +14,14 @@ _purge_app_dirs() {
     printf '%s\n' "${dirs[@]}"
 }
 
-_purge_resolve_bundle_id() {
+_macwash_resolve_bundle_id() {
     local plist="$1/Contents/Info.plist"
     [[ -f "$plist" ]] || { echo "unknown"; return; }
     local bid; bid=$(plutil -extract CFBundleIdentifier raw "$plist" 2>/dev/null || echo "")
     [[ -n "$bid" && "$bid" != "(null)" ]] && echo "$bid" || echo "unknown"
 }
 
-_purge_resolve_display_name() {
+_macwash_resolve_display_name() {
     local app_path="$1" fallback="$2"
     local plist="$app_path/Contents/Info.plist"
     [[ -f "$plist" ]] || { echo "$fallback"; return; }
@@ -49,10 +49,10 @@ scan_applications() {
             local parent="${app_path%/*}"
             [[ "$parent" == *.app || "$parent" == *.app/* ]] && continue
 
-            bundle_id=$(_purge_resolve_bundle_id "$app_path")
+            bundle_id=$(_macwash_resolve_bundle_id "$app_path")
             should_protect_from_uninstall "$bundle_id" && continue
 
-            display_name=$(_purge_resolve_display_name "$app_path" "$app_name")
+            display_name=$(_macwash_resolve_display_name "$app_path" "$app_name")
             size_kb=$(get_path_size_kb "$app_path" 2>/dev/null || echo 0)
             [[ "$size_kb" =~ ^[0-9]+$ ]] || size_kb=0
             size_human=$(bytes_to_human_kb "$size_kb")
@@ -62,5 +62,5 @@ scan_applications() {
             APP_PATHS+=("$app_path")
             APP_BUNDLE_IDS+=("$bundle_id")
         done < <(find "$app_dir" -maxdepth 3 -name "*.app" -print0 2>/dev/null)
-    done < <(_purge_app_dirs)
+    done < <(_macwash_app_dirs)
 }

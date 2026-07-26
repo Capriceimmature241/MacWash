@@ -5,8 +5,8 @@ set -euo pipefail
 [[ -n "${MACWASH_SUDO_LOADED:-}" ]] && return 0
 readonly MACWASH_SUDO_LOADED=1
 
-_PURGE_CORE_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-[[ -z "${MACWASH_BASE_LOADED:-}" ]] && source "$_PURGE_CORE_DIR/base.sh"
+_MACWASH_CORE_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+[[ -z "${MACWASH_BASE_LOADED:-}" ]] && source "$_MACWASH_CORE_DIR/base.sh"
 
 has_sudo_session() {
     [[ "${MACWASH_TEST_NO_AUTH:-0}" == "1" ]] && return 1

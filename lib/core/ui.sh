@@ -5,8 +5,8 @@ set -euo pipefail
 [[ -n "${MACWASH_UI_LOADED:-}" ]] && return 0
 readonly MACWASH_UI_LOADED=1
 
-_PURGE_CORE_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-[[ -z "${MACWASH_BASE_LOADED:-}" ]] && source "$_PURGE_CORE_DIR/base.sh"
+_MACWASH_CORE_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+[[ -z "${MACWASH_BASE_LOADED:-}" ]] && source "$_MACWASH_CORE_DIR/base.sh"
 
 # ── Cursor control ───────────────────────────────────────────────────────────
 clear_screen() { printf '\033[2J\033[H'; }
@@ -93,7 +93,7 @@ MACWASH_SPINNER_STOP_FILE=""
 MACWASH_SPINNER_MSG_FILE=""
 MACWASH_SPINNER_DIR=""
 
-_purge_spinner_chars() { printf '%s' '|/-\'; }
+_macwash_spinner_chars() { printf '%s' '|/-\'; }
 
 start_inline_spinner() {
     stop_inline_spinner 2>/dev/null || true
@@ -112,7 +112,7 @@ start_inline_spinner() {
     (
         local stop="$MACWASH_SPINNER_STOP_FILE"
         local msgf="$MACWASH_SPINNER_MSG_FILE"
-        local chars; chars=$(_purge_spinner_chars)
+        local chars; chars=$(_macwash_spinner_chars)
         local i=0 cur="$message" nxt=""
         printf '\r\033[2K' >&2
         while [[ ! -f "$stop" ]]; do
