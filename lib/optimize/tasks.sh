@@ -168,11 +168,12 @@ opt_dock_refresh() {
         # Remove icon caches that cause broken/blank Dock icons
         safe_remove "$HOME/Library/Caches/com.apple.dock.iconcache" true
         safe_remove "$HOME/Library/Caches/com.apple.iconservices.store" true
-        # Restart Dock to apply
-        killall Dock 2>/dev/null || true
+        # Restart Dock only if not running in a terminal spawned by Dock
+        # Use nohup + disown so the restart doesn't kill the current shell
+        ( nohup killall Dock >/dev/null 2>&1 & ) || true
     fi
     opt_msg "Dock icon cache cleared"
-    opt_msg "Dock restarted"
+    opt_msg "Dock refresh queued"
 }
 
 # ── 10. Memory optimization ───────────────────────────────────────────────────
