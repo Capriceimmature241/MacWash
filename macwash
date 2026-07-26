@@ -1,0 +1,130 @@
+#!/bin/bash
+# MacWash - Main CLI entrypoint.
+# A macOS cleanup, uninstall, analyze, optimize, and monitor tool.
+# Router only: parses args and dispatches to bin/ commands.
+
+set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
+# Capture entry script path before any sourcing
+MACWASH_ENTRY_SCRIPT="${BASH_SOURCE[0]}"
+export MACWASH_ENTRY_SCRIPT
+
+MACWASH_CLI_DEBUG=false
+declare -a MACWASH_CLI_ARGS=()
+
+macwash_collect_args() {
+    MACWASH_CLI_ARGS=()
+    MACWASH_CLI_DEBUG=false
+    local arg
+    for arg in "$@"; do
+        case "$arg" in
+            --debug) MACWASH_CLI_DEBUG=true ;;
+            *)       MACWASH_CLI_ARGS+=("$arg") ;;
+        esac
+    done
+}
+
+source "$SCRIPT_DIR/lib/core/common.sh"
+source "$SCRIPT_DIR/lib/manage/update.sh"
+source "$SCRIPT_DIR/lib/manage/remove.sh"
+
+trap cleanup_temp_files EXIT INT TERM
+
+VERSION="1.0.0"
+MACWASH_TAGLINE="The car wash for your Mac."
+
+# ──────────────────────────────────────────────
+# Interactive menu
+# ──────────────────────────────────────────────
+show_main_menu() {
+    local selected="${1:-1}"
+    printf '\033[H'
+    printf '\r\033[2K\n'
+    echo -e "${CYAN_BOLD}  ◈ MacWash${NC}  ${GRAY}$MACWASH_TAGLINE${NC}"
+    printf '\r\033[2K\n'
+    printf '\r\033[2K%s\n' "$(show_menu_option 1 "Clean        Free up disk space"       "$([[ $selected -eq 1 ]] && echo true || echo false)")"
+    printf '\r\033[2K%s\n' "$(show_menu_option 2 "Apps         Uninstall + leftovers"     "$([[ $selected -eq 2 ]] && echo true || echo false)")"
+    printf '\r\033[2K%s\n' "$(show_menu_option 3 "Optimize     Refresh caches & services" "$([[ $selected -eq 3 ]] && echo true || echo false)")"
+    printf '\r\033[2K%s\n' "$(show_menu_option 4 "Analyze      Explore disk usage"        "$([[ $selected -eq 4 ]] && echo true || echo false)")"
+    printf '\r\033[2K%s\n' "$(show_menu_option 5 "Status       Live system health"        "$([[ $selected -eq 5 ]] && echo true || echo false)")"
+    if [[ -t 0 ]]; then
+        printf '\r\033[2K\n'
+        echo -e "  ${GRAY}↑↓  |  Enter  |  Q Quit  |  V Version  |  U Update${NC}"
+        printf '\r\033[2K\n'
+    fi
+    printf '\033[J'
+}
+
+interactive_main_menu() {
+    local current=1
+    hide_cursor
+    trap 'show_cursor; exit 0' INT
+
+    while true; do
+        show_main_menu "$current"
+        local key
+        key=$(read_key) || key="QUIT"
+        case "$key" in
+            UP)    ((current > 1)) && ((current--)) ;;
+            DOWN)  ((current < 5)) && ((current++)) ;;
+            ENTER)
+                show_cursor
+                drain_pending_input 0.1
+                case $current in
+                    1) exec "$SCRIPT_DIR/bin/clean.sh"     ;;
+                    2) exec "$SCRIPT_DIR/bin/uninstall.sh" ;;
+                    3) exec "$SCRIPT_DIR/bin/optimize.sh"  ;;
+                    4) exec "$SCRIPT_DIR/bin/analyze.sh"   ;;
+                    5) exec "$SCRIPT_DIR/bin/status.sh"    ;;
+                esac ;;
+            "CHAR:1") show_cursor; exec "$SCRIPT_DIR/bin/clean.sh"     ;;
+            "CHAR:2") show_cursor; exec "$SCRIPT_DIR/bin/uninstall.sh" ;;
+            "CHAR:3") show_cursor; exec "$SCRIPT_DIR/bin/optimize.sh"  ;;
+            "CHAR:4") show_cursor; exec "$SCRIPT_DIR/bin/analyze.sh"   ;;
+            "CHAR:5") show_cursor; exec "$SCRIPT_DIR/bin/status.sh"    ;;
+            VERSION)  show_cursor; clear; show_version; exit 0 ;;
+            UPDATE)   show_cursor; clear; update_macwash; exit 0 ;;
+            QUIT)     show_cursor; exit 0 ;;
+        esac
+        drain_pending_input
+    done
+}
+
+# ──────────────────────────────────────────────
+# CLI dispatch
+# ──────────────────────────────────────────────
+main() {
+    macwash_collect_args "$@"
+    [[ "$MACWASH_CLI_DEBUG" == "true" ]] && export MACWASH_DEBUG=1
+
+    local -a args=()
+    [[ ${#MACWASH_CLI_ARGS[@]} -gt 0 ]] && args=("${MACWASH_CLI_ARGS[@]}")
+
+    case "${args[0]:-""}" in
+        clean)           exec "$SCRIPT_DIR/bin/clean.sh"     "${args[@]:1}" ;;
+        uninstall)       exec "$SCRIPT_DIR/bin/uninstall.sh" "${args[@]:1}" ;;
+        optimize)        exec "$SCRIPT_DIR/bin/optimize.sh"  "${args[@]:1}" ;;
+        analyze|analyse) exec "$SCRIPT_DIR/bin/analyze.sh"   "${args[@]:1}" ;;
+        status)          exec "$SCRIPT_DIR/bin/status.sh"    "${args[@]:1}" ;;
+        history)         exec "$SCRIPT_DIR/bin/history.sh"   "${args[@]:1}" ;;
+        update)
+            update_macwash
+            exit 0 ;;
+        remove)
+            remove_macwash "${args[1]:-}" ;;
+        help|--help|-h)
+            show_help; exit 0 ;;
+        version|--version|-V)
+            show_version; exit 0 ;;
+        "")
+            interactive_main_menu ;;
+        *)
+            echo "Unknown command: ${args[0]}"
+            echo "Run 'macwash --help' for usage."
+            exit 1 ;;
+    esac
+}
+
+main "$@"
