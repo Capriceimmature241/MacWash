@@ -33,7 +33,7 @@ source "$SCRIPT_DIR/lib/manage/remove.sh"
 trap cleanup_temp_files EXIT INT TERM
 
 VERSION="1.0.0"
-MACWASH_TAGLINE="The car wash for your Mac."
+MACWASH_TAGLINE="Clean, optimize and speed up your Mac."
 
 # ──────────────────────────────────────────────
 # Interactive menu

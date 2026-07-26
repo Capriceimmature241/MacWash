@@ -8,7 +8,7 @@ readonly MACWASH_HELP_LOADED=1
 show_help() {
     cat <<EOF
 
-${CYAN_BOLD}MacWash${NC} — The car wash for your Mac.
+${CYAN_BOLD}MacWash${NC} — Clean, optimize and speed up your Mac. Free and open source.
 
 ${CYAN_BOLD}Usage:${NC}
   macwash                     Interactive menu

@@ -1,5 +1,5 @@
 class Macwash < Formula
-  desc "The car wash for your Mac — clean, uninstall, analyze, optimize and monitor from the terminal"
+  desc "Clean, optimize and speed up your Mac. Free and open source — clean, uninstall, analyze, optimize and monitor from the terminal"
   homepage "https://github.com/toolka/MacWash"
   url "https://github.com/toolka/MacWash/archive/refs/tags/v1.0.0.tar.gz"
   # sha256 will be filled in after the v1.0.0 release is published on GitHub

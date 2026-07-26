@@ -1,6 +1,6 @@
 # MacWash 🧼
 
-> The car wash for your Mac — clean, uninstall, analyze, optimize, and monitor from the terminal.
+> Clean, optimize and speed up your Mac. Free and open source — clean, uninstall, analyze, optimize, and monitor from the terminal.
 
 <p align="center">
   <img src="https://img.shields.io/badge/platform-macOS-lightgrey?style=flat-square" />
