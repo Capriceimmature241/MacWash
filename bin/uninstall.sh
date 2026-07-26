@@ -11,8 +11,8 @@ source "$SCRIPT_DIR/lib/uninstall/scanner.sh"
 source "$SCRIPT_DIR/lib/uninstall/batch.sh"
 
 DRY_RUN=false
-trap 'stop_inline_spinner 2>/dev/null; cleanup_temp_files; show_cursor' EXIT
-trap 'stop_inline_spinner 2>/dev/null; cleanup_temp_files; show_cursor; exit 130' INT TERM
+trap 'stop_inline_spinner 2>/dev/null; cleanup_temp_files; show_cursor; stty sane 2>/dev/null || true' EXIT
+trap 'stop_inline_spinner 2>/dev/null; cleanup_temp_files; show_cursor; stty sane 2>/dev/null || true; exit 130' INT TERM
 
 for arg in "$@"; do
     case "$arg" in
@@ -46,8 +46,6 @@ if [[ "$total_apps" -eq 0 ]]; then
     exit 0
 fi
 
-echo -e "  ${GRAY}Found $total_apps apps  ·  Select to uninstall:${NC}\n"
-
 # ── Selection menu ────────────────────────────────────────────────────────────
 declare -a SELECTED=()
 for i in "${!APP_LIST[@]}"; do SELECTED+=("false"); done
@@ -55,46 +53,84 @@ for i in "${!APP_LIST[@]}"; do SELECTED+=("false"); done
 current=0
 page_size=15
 
-render_list() {
-    local start=$((current / page_size * page_size))
-    local end=$((start + page_size))
+# Save terminal state before raw mode
+original_stty=$(stty -g 2>/dev/null || echo "")
+
+restore_terminal() {
+    show_cursor
+    if [[ -n "$original_stty" ]]; then
+        stty "$original_stty" 2>/dev/null || stty sane 2>/dev/null || true
+    else
+        stty sane 2>/dev/null || true
+    fi
+}
+
+draw_menu() {
+    local start=$(( current / page_size * page_size ))
+    local end=$(( start + page_size ))
     [[ $end -gt $total_apps ]] && end=$total_apps
+
+    # Count selected
+    local sel_count=0
+    for s in "${SELECTED[@]}"; do [[ "$s" == "true" ]] && sel_count=$((sel_count+1)); done
+
+    printf '\033[H\033[2J'
+    echo -e "${CYAN_BOLD}  ◈ MacWash  Uninstall${NC}  ${GRAY}${sel_count} selected${NC}"
+    echo ""
+
     local i
     for ((i=start; i<end; i++)); do
-        local check="☐"; [[ "${SELECTED[$i]}" == "true" ]] && check="☑"
-        local marker="  "
-        [[ "$i" -eq "$current" ]] && marker="${CYAN}▶${NC}"
+        local check="☐"
+        [[ "${SELECTED[$i]}" == "true" ]] && check="☑"
         local sz="${APP_SIZES[$i]:-?}"
-        printf '\r\033[2K  %s %s %-36s  %s\n' "$marker" "$check" "${APP_LIST[$i]}" "$sz"
+
+        if [[ "$i" -eq "$current" ]]; then
+            echo -e "  ${CYAN}▶ ${check} ${APP_LIST[$i]}${NC}  ${GRAY}${sz}${NC}"
+        else
+            echo "    ${check} ${APP_LIST[$i]}  ${sz}"
+        fi
     done
+
     echo ""
     echo -e "  ${GRAY}↑↓ Navigate  |  Space Select  |  Enter Confirm  |  Q Quit${NC}"
 }
 
+stty -echo -icanon intr ^C 2>/dev/null || true
 hide_cursor
+
 while true; do
-    printf '\033[H'
-    echo -e "${CYAN_BOLD}  ◈ MacWash  Uninstall${NC}\n"
-    render_list
-    printf '\033[J'
+    draw_menu
 
     key=$(read_key 2>/dev/null || echo "QUIT")
     case "$key" in
-        UP)    ((current > 0))              && ((current--)) ;;
-        DOWN)  ((current < total_apps - 1)) && ((current++)) ;;
+        UP)
+            ((current > 0)) && ((current--))
+            ;;
+        DOWN)
+            ((current < total_apps - 1)) && ((current++))
+            ;;
         SPACE)
             if [[ "${SELECTED[$current]}" == "true" ]]; then
                 SELECTED[$current]="false"
             else
                 SELECTED[$current]="true"
-            fi ;;
-        ENTER) break ;;
-        QUIT)  show_cursor; echo ""; exit 0 ;;
+            fi
+            ;;
+        ENTER)
+            break
+            ;;
+        QUIT)
+            restore_terminal
+            echo ""
+            exit 0
+            ;;
     esac
 done
-show_cursor
 
-# ── Confirm and uninstall ─────────────────────────────────────────────────────
+restore_terminal
+clear
+
+# ── Count selected ────────────────────────────────────────────────────────────
 selected_count=0
 for s in "${SELECTED[@]}"; do [[ "$s" == "true" ]] && selected_count=$((selected_count+1)); done
 
@@ -103,13 +139,24 @@ if [[ "$selected_count" -eq 0 ]]; then
     exit 0
 fi
 
+# ── Show what will be removed ─────────────────────────────────────────────────
 echo ""
-echo -e "  ${YELLOW}${ICON_WARNING}${NC} About to remove ${RED}$selected_count${NC} app(s) and their leftovers."
-echo -ne "  ${GRAY}Continue? [y/N]:${NC} "
+echo -e "${CYAN_BOLD}  ◈ MacWash  Uninstall${NC}"
+echo ""
+echo -e "  ${YELLOW}${ICON_WARNING}${NC} Selected ${RED}$selected_count${NC} app(s) for removal:"
+echo ""
+for i in "${!APP_LIST[@]}"; do
+    [[ "${SELECTED[$i]}" == "true" ]] || continue
+    echo -e "  ${GRAY}•${NC} ${APP_LIST[$i]}  ${GRAY}(${APP_SIZES[$i]})${NC}"
+done
+echo ""
+echo -ne "  Continue? [y/N]: "
 read -r confirm
-[[ "$confirm" =~ ^[Yy]$ ]] || { echo "  Aborted."; exit 0; }
-
 echo ""
+
+[[ "$confirm" =~ ^[Yy]$ ]] || { echo -e "  ${GRAY}Aborted.${NC}"; exit 0; }
+
+# ── Uninstall ─────────────────────────────────────────────────────────────────
 for i in "${!APP_LIST[@]}"; do
     [[ "${SELECTED[$i]}" == "true" ]] || continue
     uninstall_app "${APP_PATHS[$i]}" "${APP_LIST[$i]}" "${APP_BUNDLE_IDS[$i]:-}"
