@@ -61,7 +61,8 @@ _disk_stats() {
 }
 
 _uptime_str() {
-    local boot; boot=$(sysctl -n kern.boottime 2>/dev/null | grep -oE 'sec = [0-9]+' | grep -oE '[0-9]+' || echo 0)
+    local boot; boot=$(sysctl -n kern.boottime 2>/dev/null | awk -F'[=,}]' '{print $2}' | tr -d ' ' || echo 0)
+    [[ "$boot" =~ ^[0-9]+$ ]] || boot=0
     local now; now=$(get_epoch_seconds)
     local elapsed=$(( now - boot ))
     local days=$(( elapsed / 86400 ))

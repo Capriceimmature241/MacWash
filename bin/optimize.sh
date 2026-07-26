@@ -33,13 +33,15 @@ echo ""
 mem_total=$(sysctl -n hw.memsize 2>/dev/null || echo 0)
 mem_total_gb=$((mem_total / 1024 / 1024 / 1024))
 disk_free_kb=$(get_free_space_kb 2>/dev/null || echo 0)
-uptime_days=$(( $(sysctl -n kern.boottime 2>/dev/null | grep -oE 'sec = [0-9]+' | grep -oE '[0-9]+' || echo 0) ))
-uptime_days=$(( ($(get_epoch_seconds) - uptime_days) / 86400 ))
+boot_sec=$(sysctl -n kern.boottime 2>/dev/null | awk -F'[=,}]' '{print $2}' | tr -d ' ' || echo 0)
+[[ "$boot_sec" =~ ^[0-9]+$ ]] || boot_sec=0
+now_sec=$(get_epoch_seconds)
+uptime_days=$(( (now_sec - boot_sec) / 86400 ))
 echo -e "  ${ICON_ADMIN} System  ${mem_total_gb}GB RAM  |  $(bytes_to_human_kb "$disk_free_kb") free  |  Uptime ${uptime_days}d"
 echo ""
 
 # ── Sudo ──────────────────────────────────────────────────────────────────────
-PURGE_OPT_SUDO=false
+MACWASH_OPT_SUDO=false
 if [[ "$DRY_RUN" != "true" ]] && ensure_sudo_session "System optimization requires admin access"; then
     PURGE_OPT_SUDO=true
 fi
