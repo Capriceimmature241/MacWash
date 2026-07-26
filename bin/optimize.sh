@@ -72,6 +72,24 @@ opt_announce "SQLite databases"
 opt_announce "Quarantine history"
     opt_quarantine_db
 
+opt_announce "Preference files"
+    opt_broken_configs
+
+opt_announce "Dock refresh"
+    opt_dock_refresh
+
+opt_announce "Memory"
+    opt_memory_pressure
+
+opt_announce "Network stack"
+    opt_network_stack
+
+opt_announce "Login items"
+    opt_login_items_audit
+
+opt_announce "Launch agents"
+    opt_launch_agents_cleanup
+
 # ── Summary ────────────────────────────────────────────────────────────────────
 echo ""
 echo -e "  ${GRAY}$(printf '─%.0s' {1..60})${NC}"
