@@ -4,6 +4,16 @@ All notable changes to MacWash are documented here.
 
 ---
 
+## [v1.0.7] — 2026-07-27
+
+### Changed
+- **Matrix green theme** applied throughout the entire app
+- Main menu selections now in bright matrix green
+- All section headers and highlights use matrix green
+- Consistent color scheme across Clean, Uninstall, Optimize, Analyze, and Status
+
+---
+
 ## [v1.0.6] — 2026-07-27
 
 ### Changed

@@ -10,17 +10,20 @@ readonly MACWASH_BASE_LOADED=1
 : "${DRY_RUN:=false}"
 
 # ── Colors (honor NO_COLOR) ──────────────────────────────────────────────────
+# Matrix green theme throughout the app
 if [[ -n "${NO_COLOR:-}" ]]; then
-    readonly ESC="" GREEN="" BLUE="" CYAN="" YELLOW="" PURPLE=""
-    readonly CYAN_BOLD="" PURPLE_BOLD="" RED="" GRAY="" NC=""
+    readonly ESC="" GREEN="" BRIGHT_GREEN="" BLUE="" CYAN="" YELLOW="" PURPLE=""
+    readonly CYAN_BOLD="" PURPLE_BOLD="" RED="" GRAY="" NC="" MATRIX=""
 else
     readonly ESC=$'\033'
     readonly GREEN="${ESC}[0;32m"
+    readonly BRIGHT_GREEN="${ESC}[1;92m"   # Matrix green (bright)
+    readonly MATRIX="${ESC}[1;92m"          # Alias for matrix green
     readonly BLUE="${ESC}[1;34m"
     readonly CYAN="${ESC}[0;36m"
     readonly YELLOW="${ESC}[0;33m"
     readonly PURPLE="${ESC}[0;35m"
-    readonly CYAN_BOLD="${ESC}[1;36m"
+    readonly CYAN_BOLD="${ESC}[1;92m"       # Changed to matrix green
     readonly PURPLE_BOLD="${ESC}[1;35m"
     readonly RED="${ESC}[0;31m"
     readonly GRAY="${ESC}[0;90m"
