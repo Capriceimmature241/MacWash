@@ -1,8 +1,9 @@
 # macOS
 .DS_Store
 
-# Internal planning docs
+# Internal planning docs (maintainer only — never push)
 ROADMAP.md
+DEVGUIDE.md
 .AppleDouble
 .LSOverride
 
