@@ -9,9 +9,11 @@
 <p>
   <img src="https://img.shields.io/badge/platform-macOS-lightgrey?style=flat-square" />
   <img src="https://img.shields.io/badge/license-MIT-blue?style=flat-square" />
-  <img src="https://img.shields.io/badge/shell-bash%203.2%2B-green?style=flat-square" />
-  <img src="https://img.shields.io/badge/version-1.0.1-orange?style=flat-square" />
-  <img src="https://img.shields.io/github/stars/toolka/MacWash?style=flat-square" />
+  <img src="https://img.shields.io/badge/shell-bash%203.2%2B-brightgreen?style=flat-square" />
+  <img src="https://img.shields.io/github/v/release/toolka/MacWash?style=flat-square&color=orange" />
+  <img src="https://img.shields.io/github/stars/toolka/MacWash?style=flat-square&color=yellow" />
+  <img src="https://img.shields.io/badge/PRs-welcome-brightgreen?style=flat-square" />
+  <img src="https://img.shields.io/badge/contributions-welcome-brightgreen?style=flat-square" />
 </p>
 
 </div>
@@ -212,19 +214,29 @@ Protected app categories (data never deleted):
 
 ## Contributing
 
-Contributions welcome. Open an issue or pull request.
+We welcome contributions from everyone — bug fixes, new features, documentation, and testing on different macOS versions.
+
+Read [CONTRIBUTING.md](CONTRIBUTING.md) to get started.
+
+**You can help by:**
+- 🐛 Fixing bugs
+- ✨ Adding new cleaning modules or app support
+- 🎨 Improving the UI
+- 📖 Improving documentation
+- 🧪 Testing on different macOS versions
+- 🌍 Reporting issues
+
+Look for [`good first issue`](https://github.com/toolka/MacWash/labels/good%20first%20issue) labels for easy entry points.
 
 ```bash
-# Clone
+# Clone and test locally
 git clone https://github.com/toolka/MacWash.git
 cd MacWash
-
-# Test syntax
 make test
-
-# Run locally
 bash macwash --help
 ```
+
+Before starting large changes, open an Issue to discuss your proposal. We appreciate every contribution — large or small.
 
 ---
 
