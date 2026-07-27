@@ -111,8 +111,6 @@ brew trust toolka/macwash
 brew install macwash
 ```
 
-> `brew install macwash` via official Homebrew core is coming once we reach enough ⭐ stars.
-
 ---
 
 ## Usage
