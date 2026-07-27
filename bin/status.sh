@@ -452,6 +452,8 @@ stty -echo -icanon min 0 time 0 2>/dev/null || true
 
 # Initial collect
 _collect
+elapsed=0
+key=""
 
 while true; do
     # Read latest network data
@@ -464,7 +466,7 @@ while true; do
     _render
 
     # Wait up to 3s checking for keypress every 0.1s
-    local elapsed=0
+    elapsed=0
     while [[ $elapsed -lt 30 ]]; do
         key=""
         IFS= read -r -s -n1 -t 0.1 key 2>/dev/null || true
