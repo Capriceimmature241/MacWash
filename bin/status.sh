@@ -242,19 +242,23 @@ _color_for_pct() {
 }
 
 _top_processes() {
-    ps -Acro pid,pcpu,pmem,comm 2>/dev/null | awk 'NR>1 && NF>=4 {
-        pid=$1; cpu=$2; mem=$3
+    ps -Acro pcpu,pmem,comm 2>/dev/null | awk 'NR>1 && NF>=3 {
+        cpu=$1; mem=$2
         name=""
-        for(i=4;i<=NF;i++) name=name" "$i
-        sub(/^ /,"",name)
-        # Shorten common prefixes
+        for(i=3;i<=NF;i++) name=(i==3)?$i:name" "$i
+        # Clean prefix noise
         gsub(/^com\.apple\./,"",name)
         gsub(/^com\./,"",name)
         gsub(/^org\./,"",name)
-        # Truncate
-        if(length(name)>30) name=substr(name,1,27)"..."
-        printf "  %-32s %5s%%  %5s%%\n", name, cpu, mem
-    }' | head -8
+        # Truncate to 32 chars
+        if(length(name)>32) name=substr(name,1,29)"..."
+        # Color CPU bar (simple visual)
+        bar=""
+        n=int(cpu/5); if(n>10)n=10
+        for(j=0;j<n;j++) bar=bar"▮"
+        for(j=n;j<10;j++) bar=bar"▯"
+        printf "  %-33s %5s%%  %5s%%  %s\n", name, cpu, mem, bar
+    }' | head -10
 }
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -385,46 +389,79 @@ _render() {
 
     # ── Top Processes ─────────────────────────────────────────────────────────
     _divider
-    printf '  %s%-32s %6s  %6s%s\n' \
-        "${CYAN_BOLD}" "▶ Process" "CPU" "MEM" "${NC}"
+    printf '  %s%-33s %6s  %6s  %s%s\n' \
+        "${CYAN_BOLD}" "▶ Process" "CPU" "MEM" "Activity" "${NC}"
+    echo -e "  ${GRAY}$(printf '─%.0s' {1..60})${NC}"
     _top_processes
     echo ""
 
     # ── Footer ────────────────────────────────────────────────────────────────
     _divider
-    echo -e "  ${GRAY}Q Quit  ·  Refreshes every 5s${NC}"
+    local ts; ts=$(date '+%H:%M:%S' 2>/dev/null || echo "")
+    echo -e "  ${GRAY}Q Quit  ·  Live refresh  ·  Updated: ${ts}${NC}"
     printf '\033[J'
 }
 
 # ─────────────────────────────────────────────────────────────────────────────
-# Main loop
+# Main loop — truly live, refreshes every 3 seconds
 # ─────────────────────────────────────────────────────────────────────────────
 clear_screen
 stty -echo -icanon intr ^C 2>/dev/null || true
 hide_cursor
 
-# Initial collect with network (slow — 1s)
-_collect
-read -r NET_IFACE NET_RX NET_TX <<< "$(_network_stats)"
+NET_IFACE="en0"; NET_RX="-- KB/s"; NET_TX="-- KB/s"
 
-cycle=0
+# Start background network sampler — writes to temp file every 3s
+NET_TMP=$(create_temp_file)
+(
+    while true; do
+        iface=$(route -n get default 2>/dev/null | awk '/interface:/{print $2}' | head -1)
+        [[ -z "$iface" ]] && iface="en0"
+        line1=$(netstat -ib 2>/dev/null | awk -v i="$iface" '$1==i && $3!~/Link/{print $7,$10; exit}')
+        rx1=$(echo "$line1" | awk '{print $1}'); tx1=$(echo "$line1" | awk '{print $2}')
+        [[ "$rx1" =~ ^[0-9]+$ ]] || rx1=0; [[ "$tx1" =~ ^[0-9]+$ ]] || tx1=0
+        sleep 1
+        line2=$(netstat -ib 2>/dev/null | awk -v i="$iface" '$1==i && $3!~/Link/{print $7,$10; exit}')
+        rx2=$(echo "$line2" | awk '{print $1}'); tx2=$(echo "$line2" | awk '{print $2}')
+        [[ "$rx2" =~ ^[0-9]+$ ]] || rx2=0; [[ "$tx2" =~ ^[0-9]+$ ]] || tx2=0
+        rx_speed=$(( rx2 - rx1 )); tx_speed=$(( tx2 - tx1 ))
+        [[ $rx_speed -lt 0 ]] && rx_speed=0; [[ $tx_speed -lt 0 ]] && tx_speed=0
+        rx_h=$(awk "BEGIN{v=$rx_speed; if(v>=1048576) printf \"%.1f MB/s\",v/1048576; else if(v>=1024) printf \"%.0f KB/s\",v/1024; else printf \"%d B/s\",v}")
+        tx_h=$(awk "BEGIN{v=$tx_speed; if(v>=1048576) printf \"%.1f MB/s\",v/1048576; else if(v>=1024) printf \"%.0f KB/s\",v/1024; else printf \"%d B/s\",v}")
+        printf '%s|%s|%s\n' "$iface" "$rx_h" "$tx_h" > "$NET_TMP"
+        sleep 2
+    done
+) 2>/dev/null &
+NET_BG_PID=$!
+disown "$NET_BG_PID" 2>/dev/null || true
+
+# Initial collect
+_collect
+
 while true; do
+    # Read network from background sampler
+    if [[ -s "$NET_TMP" ]]; then
+        NET_IFACE=$(cut -d'|' -f1 "$NET_TMP")
+        NET_RX=$(cut -d'|' -f2 "$NET_TMP")
+        NET_TX=$(cut -d'|' -f3 "$NET_TMP")
+    fi
+
     _render
 
+    # Non-blocking key check — 3s timeout for live refresh
     key=""
-    IFS= read -r -s -n1 -t 5 key 2>/dev/null || true
+    IFS= read -r -s -n1 -t 3 key 2>/dev/null || true
     case "$key" in
         q|Q|$'\x03') break ;;
     esac
 
-    # Recollect
+    # Recollect metrics
     _collect
-    # Network every 3 cycles
-    if [[ $((cycle % 3)) -eq 0 ]]; then
-        read -r NET_IFACE NET_RX NET_TX <<< "$(_network_stats)"
-    fi
-    cycle=$((cycle + 1))
 done
+
+# Cleanup background sampler
+kill "$NET_BG_PID" 2>/dev/null || true
+wait "$NET_BG_PID" 2>/dev/null || true
 
 show_cursor
 stty sane 2>/dev/null || true
