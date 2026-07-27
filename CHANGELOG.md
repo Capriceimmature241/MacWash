@@ -4,6 +4,35 @@ All notable changes to MacWash are documented here.
 
 ---
 
+## [v1.0.4] — 2026-07-27
+
+### Fixed
+- **Status dashboard now shows live updating data** (refreshes every ~3 seconds)
+- **Q to quit** now works properly in Status view
+- Fixed terminal handling when launching Status from main menu
+
+### Added
+- **Arrow keys navigation** in process list (↑↓ to select)
+- **K key to kill** selected process
+- **J/P keys** for vim-style navigation (down/up)
+- Process selection highlight with ▶ indicator
+- Protection against killing system-critical processes
+
+### Technical
+- Disabled strict mode after sourcing to allow read with timeout
+- Reset terminal state before entering TUI
+- Read input from /dev/tty for reliable keyboard handling
+- Background network sampler for non-blocking updates
+
+---
+
+## [v1.0.3] — 2026-07-27
+
+### Fixed
+- Minor status display improvements
+
+---
+
 ## [v1.0.2] — 2026-07-27
 
 ### Added
