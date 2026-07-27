@@ -217,8 +217,8 @@ while true; do
     printf '\033[H'
 
     # Header
-    local HC="$GREEN"; [[ $HS -lt 70 ]] && HC="$YELLOW"; [[ $HS -lt 50 ]] && HC="$RED"
-    local HL="Excellent"; [[ $HS -lt 90 ]] && HL="Good"; [[ $HS -lt 70 ]] && HL="Fair"; [[ $HS -lt 50 ]] && HL="Poor"
+    HC="$GREEN"; [[ $HS -lt 70 ]] && HC="$YELLOW"; [[ $HS -lt 50 ]] && HC="$RED"
+    HL="Excellent"; [[ $HS -lt 90 ]] && HL="Good"; [[ $HS -lt 70 ]] && HL="Fair"; [[ $HS -lt 50 ]] && HL="Poor"
     printf '\033[2K'; echo -e "${CYAN_BOLD}  ◈ MacWash  Status${NC}  ${HC}● Health $HS  $HL${NC}"
     printf '\033[2K'; echo -e "  ${GRAY}$HOST  ·  $ARCH  ·  macOS $MACOS  ·  up $UP${NC}"
     printf '\033[2K'; _div; printf '\033[2K\n'
