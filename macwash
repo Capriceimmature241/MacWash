@@ -32,7 +32,7 @@ source "$SCRIPT_DIR/lib/manage/remove.sh"
 
 trap cleanup_temp_files EXIT INT TERM
 
-VERSION="1.0.2"
+VERSION="1.0.4"
 MACWASH_TAGLINE="Clean, optimize and speed up your Mac."
 
 # ──────────────────────────────────────────────
@@ -71,6 +71,7 @@ interactive_main_menu() {
             DOWN)  ((current < 5)) && ((current++)) ;;
             ENTER)
                 show_cursor
+                stty sane 2>/dev/null || true
                 drain_pending_input 0.1
                 case $current in
                     1) exec "$SCRIPT_DIR/bin/clean.sh"     ;;
@@ -79,11 +80,11 @@ interactive_main_menu() {
                     4) exec "$SCRIPT_DIR/bin/analyze.sh"   ;;
                     5) exec "$SCRIPT_DIR/bin/status.sh"    ;;
                 esac ;;
-            "CHAR:1") show_cursor; exec "$SCRIPT_DIR/bin/clean.sh"     ;;
-            "CHAR:2") show_cursor; exec "$SCRIPT_DIR/bin/uninstall.sh" ;;
-            "CHAR:3") show_cursor; exec "$SCRIPT_DIR/bin/optimize.sh"  ;;
-            "CHAR:4") show_cursor; exec "$SCRIPT_DIR/bin/analyze.sh"   ;;
-            "CHAR:5") show_cursor; exec "$SCRIPT_DIR/bin/status.sh"    ;;
+            "CHAR:1") show_cursor; stty sane 2>/dev/null || true; exec "$SCRIPT_DIR/bin/clean.sh"     ;;
+            "CHAR:2") show_cursor; stty sane 2>/dev/null || true; exec "$SCRIPT_DIR/bin/uninstall.sh" ;;
+            "CHAR:3") show_cursor; stty sane 2>/dev/null || true; exec "$SCRIPT_DIR/bin/optimize.sh"  ;;
+            "CHAR:4") show_cursor; stty sane 2>/dev/null || true; exec "$SCRIPT_DIR/bin/analyze.sh"   ;;
+            "CHAR:5") show_cursor; stty sane 2>/dev/null || true; exec "$SCRIPT_DIR/bin/status.sh"    ;;
             VERSION)  show_cursor; clear; show_version; exit 0 ;;
             UPDATE)   show_cursor; clear; update_macwash; exit 0 ;;
             QUIT)     show_cursor; exit 0 ;;

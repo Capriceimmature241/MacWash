@@ -1,15 +1,31 @@
 #!/bin/bash
-# MacWash - Status: live system health dashboard. Q to quit.
+# MacWash - Status: live system health dashboard with process management.
+# Q to quit, K to kill selected process, ↑↓ to navigate processes.
 
 export LC_ALL=C LANG=C
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 source "$SCRIPT_DIR/lib/core/common.sh"
 
+# IMPORTANT: Disable strict mode AFTER sourcing - the sourced files enable it
+# This is required because the read command with timeout returns non-zero
+set +e
+set +u
+set +o pipefail
+
 JSON_MODE=false
 for arg in "$@"; do
     case "$arg" in --json) JSON_MODE=true ;; --help|-h) show_help; exit 0 ;; esac
 done
-[[ -t 1 ]] || JSON_MODE=true
+
+# Only force JSON mode if explicitly piped (not just when running in terminal)
+if [[ "$JSON_MODE" != "true" ]] && [[ ! -t 1 ]] && [[ ! -t 0 ]]; then
+    JSON_MODE=true
+fi
+
+# Process selection state
+PROC_SELECT=0
+declare -a PROC_PIDS=()
+declare -a PROC_NAMES=()
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
 _bar() {
@@ -136,16 +152,62 @@ get_score() {
     [[ $s -lt 0 ]] && s=0; echo $s
 }
 top_procs() {
+    # Store PIDs for selection/kill feature
+    PROC_PIDS=()
+    PROC_NAMES=()
+    local idx=0
     ps -Acro pid,pcpu,pmem,rss,comm 2>/dev/null | awk 'NR>1 && NF>=5 {
         pid=$1; cpu=$2; mem=$3; rss=$4
         name=""; for(i=5;i<=NF;i++) name=(i==5)?$i:name" "$i
         gsub(/^com\.apple\./,"",name)
-        if(length(name)>26) name=substr(name,1,23)"..."
+        if(length(name)>24) name=substr(name,1,21)"..."
         mb=rss/1024
         n=int(cpu/10); if(n>8)n=8; if(n<0)n=0
         bar=""; for(j=0;j<n;j++) bar=bar"▮"; for(j=n;j<8;j++) bar=bar"▯"
-        printf "  %-6s  %-26s  %6s%%  %5s%%  %7.1fMB  %s\n",pid,name,cpu,mem,mb,bar
-    }' | head -10
+        printf "%s|%s|%s|%s|%.1f|%s\n",pid,name,cpu,mem,mb,bar
+    }' | head -10 | while IFS='|' read -r pid name cpu mem mb bar; do
+        PROC_PIDS+=("$pid")
+        PROC_NAMES+=("$name")
+        echo "$pid|$name|$cpu|$mem|$mb|$bar"
+    done
+}
+
+render_procs() {
+    local sel=${1:-0}
+    local idx=0
+    PROC_PIDS=()
+    PROC_NAMES=()
+    
+    ps -Acro pid,pcpu,pmem,rss,comm 2>/dev/null | awk 'NR>1 && NF>=5 {
+        pid=$1; cpu=$2; mem=$3; rss=$4
+        name=""; for(i=5;i<=NF;i++) name=(i==5)?$i:name" "$i
+        gsub(/^com\.apple\./,"",name)
+        if(length(name)>24) name=substr(name,1,21)"..."
+        mb=rss/1024
+        n=int(cpu/10); if(n>8)n=8; if(n<0)n=0
+        bar=""; for(j=0;j<n;j++) bar=bar"▮"; for(j=n;j<8;j++) bar=bar"▯"
+        printf "%s|%s|%s|%s|%.1f|%s\n",pid,name,cpu,mem,mb,bar
+    }' | head -10 > /tmp/mw_procs_$$
+    
+    while IFS='|' read -r pid name cpu mem mb bar; do
+        PROC_PIDS+=("$pid")
+        PROC_NAMES+=("$name")
+        if [[ $idx -eq $sel ]]; then
+            printf '\033[2K  %s%-6s  %-24s  %6s%%  %5s%%  %7sMB  %s%s\n' \
+                "${CYAN_BOLD}▶ " "$pid" "$name" "$cpu" "$mem" "$mb" "$bar" "${NC}"
+        else
+            printf '\033[2K  %-6s  %-24s  %6s%%  %5s%%  %7sMB  %s\n' \
+                "$pid" "$name" "$cpu" "$mem" "$mb" "$bar"
+        fi
+        idx=$((idx + 1))
+    done < /tmp/mw_procs_$$
+    rm -f /tmp/mw_procs_$$ 2>/dev/null || true
+    
+    # Fill remaining lines if less than 10 processes
+    while [[ $idx -lt 10 ]]; do
+        printf '\033[2K\n'
+        idx=$((idx + 1))
+    done
 }
 
 # ── JSON ──────────────────────────────────────────────────────────────────────
@@ -165,6 +227,10 @@ HOST=$(scutil --get ComputerName 2>/dev/null || hostname)
 ARCH=$(detect_arch); MACOS=$(sw_vers -productVersion 2>/dev/null || echo "?")
 NET_IF="en0"; NET_RX="--"; NET_TX="--"
 
+# Process selection
+PROC_SELECT=0
+MAX_PROCS=10
+
 # Clean exit handler
 _quit() {
     printf '\033[?25h'
@@ -172,14 +238,41 @@ _quit() {
     stty sane 2>/dev/null || true
     [[ -n "${NETBG:-}" ]] && kill "$NETBG" 2>/dev/null || true
     [[ -n "${NETTMP:-}" ]] && rm -f "$NETTMP" 2>/dev/null || true
+    rm -f /tmp/mw_procs_$$ 2>/dev/null || true
     cleanup_temp_files 2>/dev/null || true
     exit 0
 }
-trap '_quit' INT TERM
+trap '_quit' INT TERM EXIT
+
+# Kill selected process
+_kill_proc() {
+    local pid="${PROC_PIDS[$PROC_SELECT]:-}"
+    local name="${PROC_NAMES[$PROC_SELECT]:-}"
+    [[ -z "$pid" || "$pid" == "0" ]] && return 1
+    
+    # Don't allow killing system-critical processes
+    case "$name" in
+        kernel_task|launchd|WindowServer|loginwindow|Finder|Dock|SystemUIServer)
+            return 1 ;;
+    esac
+    
+    if kill -15 "$pid" 2>/dev/null; then
+        return 0
+    elif kill -9 "$pid" 2>/dev/null; then
+        return 0
+    fi
+    return 1
+}
 
 # Enter alternate screen so original terminal is preserved
+stty sane 2>/dev/null || true  # Reset terminal first
 tput smcup 2>/dev/null || true
 printf '\033[?25l'
+
+# Configure terminal for raw input
+if [[ -t 0 ]]; then
+    stty -echo -icanon min 0 time 1 2>/dev/null || true
+fi
 
 # Background net sampler
 NETTMP=$(mktemp /tmp/mw_net.XXXXXX 2>/dev/null || echo "/tmp/mw_net_$$")
@@ -264,22 +357,56 @@ while true; do
 
     # Processes
     printf '\033[2K'; _div
-    printf '\033[2K'; printf '  %s%-6s  %-26s  %7s  %6s  %8s  %s%s\n' \
+    printf '\033[2K'; printf '  %s%-6s  %-24s  %7s  %6s  %8s  %s%s\n' \
         "${CYAN_BOLD}" "PID" "Process" "CPU" "MEM" "Memory" "Activity" "${NC}"
     printf '\033[2K'; printf '  \033[90m'; printf '─%.0s' {1..68}; printf '\033[0m\n'
-    top_procs | while IFS= read -r line; do printf '\033[2K%s\n' "$line"; done
+    
+    # Render processes with selection
+    render_procs "$PROC_SELECT"
+    
     printf '\033[2K\n'
     printf '\033[2K'; _div
-    printf '\033[2K'; printf '  \033[90mQ to quit  ·  Live refresh  ·  %s\033[0m\n' "$TS"
+    printf '\033[2K'; printf '  \033[90m↑↓ Navigate  |  K Kill  |  Q Quit  |  Live %s\033[0m\n' "$TS"
     printf '\033[J'
 
-    # Wait 3s, check Q every 0.1s via /dev/tty
+    # Input handling loop - check for keys every 0.1s for 3 seconds total
     i=0
     while [[ $i -lt 30 ]]; do
         ch=""
-        if read -r -s -n1 -t 0.1 ch < /dev/tty 2>/dev/null; then
-            case "$ch" in q|Q|$'\x03'|$'\x1b') _quit ;; esac
+        # Read from /dev/tty directly for reliable input in all terminal contexts
+        if IFS= read -r -s -n1 -t 0.1 ch </dev/tty 2>/dev/null; then
+            case "$ch" in
+                q|Q) _quit ;;
+                $'\x03') _quit ;;  # Ctrl+C
+                $'\x1b')  # Escape sequence (arrow keys)
+                    seq=""
+                    IFS= read -r -s -n2 -t 0.1 seq </dev/tty 2>/dev/null || true
+                    case "$seq" in
+                        '[A') # Up arrow
+                            [[ $PROC_SELECT -gt 0 ]] && PROC_SELECT=$((PROC_SELECT - 1))
+                            break  # Refresh immediately
+                            ;;
+                        '[B') # Down arrow
+                            [[ $PROC_SELECT -lt $((MAX_PROCS - 1)) ]] && PROC_SELECT=$((PROC_SELECT + 1))
+                            break  # Refresh immediately
+                            ;;
+                    esac
+                    ;;
+                k|K)  # Kill selected process
+                    if _kill_proc; then
+                        break  # Refresh to show updated process list
+                    fi
+                    ;;
+                j|J)  # Vim down
+                    [[ $PROC_SELECT -lt $((MAX_PROCS - 1)) ]] && PROC_SELECT=$((PROC_SELECT + 1))
+                    break
+                    ;;
+                p|P)  # Vim up (since K is kill)
+                    [[ $PROC_SELECT -gt 0 ]] && PROC_SELECT=$((PROC_SELECT - 1))
+                    break
+                    ;;
+            esac
         fi
-        i=$(( i+1 ))
+        i=$((i + 1))
     done
 done
