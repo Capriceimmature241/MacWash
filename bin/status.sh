@@ -242,22 +242,23 @@ _color_for_pct() {
 }
 
 _top_processes() {
-    ps -Acro pcpu,pmem,comm 2>/dev/null | awk 'NR>1 && NF>=3 {
-        cpu=$1; mem=$2
+    # Use ps with RSS (memory in KB) for accurate MB display
+    ps -Acro pid,pcpu,pmem,rss,comm 2>/dev/null | awk 'NR>1 && NF>=5 {
+        pid=$1; cpu=$2; mem=$3; rss=$4
         name=""
-        for(i=3;i<=NF;i++) name=(i==3)?$i:name" "$i
-        # Clean prefix noise
+        for(i=5;i<=NF;i++) name=(i==5)?$i:name" "$i
+        # Strip only leading bundle prefix noise — preserve real name
         gsub(/^com\.apple\./,"",name)
-        gsub(/^com\./,"",name)
-        gsub(/^org\./,"",name)
-        # Truncate to 32 chars
-        if(length(name)>32) name=substr(name,1,29)"..."
-        # Color CPU bar (simple visual)
+        # Convert RSS KB to MB
+        mb = rss/1024
+        # Truncate to 28 chars max
+        if(length(name)>28) name=substr(name,1,25)"..."
+        # CPU mini bar (1 block per 10%)
         bar=""
-        n=int(cpu/5); if(n>10)n=10
+        n=int(cpu/10); if(n>8)n=8; if(n<0)n=0
         for(j=0;j<n;j++) bar=bar"▮"
-        for(j=n;j<10;j++) bar=bar"▯"
-        printf "  %-33s %5s%%  %5s%%  %s\n", name, cpu, mem, bar
+        for(j=n;j<8;j++) bar=bar"▯"
+        printf "  %-6s  %-28s  %5s%%  %5s%%  %5.1fMB  %s\n", pid, name, cpu, mem, mb, bar
     }' | head -10
 }
 
@@ -389,9 +390,9 @@ _render() {
 
     # ── Top Processes ─────────────────────────────────────────────────────────
     _divider
-    printf '  %s%-33s %6s  %6s  %s%s\n' \
-        "${CYAN_BOLD}" "▶ Process" "CPU" "MEM" "Activity" "${NC}"
-    echo -e "  ${GRAY}$(printf '─%.0s' {1..60})${NC}"
+    printf '  %s%-6s  %-28s  %6s  %6s  %7s  %s%s\n' \
+        "${CYAN_BOLD}" "PID" "Process" "CPU" "MEM" "Memory" "Activity" "${NC}"
+    echo -e "  ${GRAY}$(printf '─%.0s' {1..68})${NC}"
     _top_processes
     echo ""
 
