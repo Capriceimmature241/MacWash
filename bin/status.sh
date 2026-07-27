@@ -193,8 +193,9 @@ render_procs() {
         PROC_PIDS+=("$pid")
         PROC_NAMES+=("$name")
         if [[ $idx -eq $sel ]]; then
-            printf '\033[2K  %s%-6s  %-24s  %6s%%  %5s%%  %7sMB  %s%s\n' \
-                "${CYAN_BOLD}▶ " "$pid" "$name" "$cpu" "$mem" "$mb" "$bar" "${NC}"
+            # Matrix green highlight for selected process
+            printf '\033[2K  \033[1;92m▶ %-6s  %-24s  %6s%%  %5s%%  %7sMB  %s\033[0m\n' \
+                "$pid" "$name" "$cpu" "$mem" "$mb" "$bar"
         else
             printf '\033[2K  %-6s  %-24s  %6s%%  %5s%%  %7sMB  %s\n' \
                 "$pid" "$name" "$cpu" "$mem" "$mb" "$bar"

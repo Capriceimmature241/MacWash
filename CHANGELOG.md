@@ -4,6 +4,13 @@ All notable changes to MacWash are documented here.
 
 ---
 
+## [v1.0.6] — 2026-07-27
+
+### Changed
+- Selected process now highlighted in **bright matrix green** instead of default text color
+
+---
+
 ## [v1.0.5] — 2026-07-27
 
 ### Fixed
