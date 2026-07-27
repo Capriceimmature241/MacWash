@@ -407,28 +407,39 @@ _render() {
 # Main loop — truly live, refreshes every 3 seconds
 # ─────────────────────────────────────────────────────────────────────────────
 clear_screen
-stty -echo -icanon intr ^C 2>/dev/null || true
 hide_cursor
 
-NET_IFACE="en0"; NET_RX="-- KB/s"; NET_TX="-- KB/s"
+# Save terminal state
+original_stty=$(stty -g 2>/dev/null || echo "")
 
-# Start background network sampler — writes to temp file every 3s
+cleanup_status() {
+    # Kill background sampler
+    [[ -n "${NET_BG_PID:-}" ]] && kill "$NET_BG_PID" 2>/dev/null || true
+    show_cursor
+    [[ -n "$original_stty" ]] && stty "$original_stty" 2>/dev/null || stty sane 2>/dev/null || true
+    echo ""
+}
+trap cleanup_status EXIT INT TERM
+
+NET_IFACE="en0"; NET_RX="--"; NET_TX="--"
+
+# Background network sampler
 NET_TMP=$(create_temp_file)
 (
     while true; do
         iface=$(route -n get default 2>/dev/null | awk '/interface:/{print $2}' | head -1)
         [[ -z "$iface" ]] && iface="en0"
         line1=$(netstat -ib 2>/dev/null | awk -v i="$iface" '$1==i && $3!~/Link/{print $7,$10; exit}')
-        rx1=$(echo "$line1" | awk '{print $1}'); tx1=$(echo "$line1" | awk '{print $2}')
-        [[ "$rx1" =~ ^[0-9]+$ ]] || rx1=0; [[ "$tx1" =~ ^[0-9]+$ ]] || tx1=0
+        rx1=$(echo "$line1" | awk '{print $1+0}')
+        tx1=$(echo "$line1" | awk '{print $2+0}')
         sleep 1
         line2=$(netstat -ib 2>/dev/null | awk -v i="$iface" '$1==i && $3!~/Link/{print $7,$10; exit}')
-        rx2=$(echo "$line2" | awk '{print $1}'); tx2=$(echo "$line2" | awk '{print $2}')
-        [[ "$rx2" =~ ^[0-9]+$ ]] || rx2=0; [[ "$tx2" =~ ^[0-9]+$ ]] || tx2=0
-        rx_speed=$(( rx2 - rx1 )); tx_speed=$(( tx2 - tx1 ))
-        [[ $rx_speed -lt 0 ]] && rx_speed=0; [[ $tx_speed -lt 0 ]] && tx_speed=0
-        rx_h=$(awk "BEGIN{v=$rx_speed; if(v>=1048576) printf \"%.1f MB/s\",v/1048576; else if(v>=1024) printf \"%.0f KB/s\",v/1024; else printf \"%d B/s\",v}")
-        tx_h=$(awk "BEGIN{v=$tx_speed; if(v>=1048576) printf \"%.1f MB/s\",v/1048576; else if(v>=1024) printf \"%.0f KB/s\",v/1024; else printf \"%d B/s\",v}")
+        rx2=$(echo "$line2" | awk '{print $1+0}')
+        tx2=$(echo "$line2" | awk '{print $2+0}')
+        rx_s=$(( rx2 - rx1 )); [[ $rx_s -lt 0 ]] && rx_s=0
+        tx_s=$(( tx2 - tx1 )); [[ $tx_s -lt 0 ]] && tx_s=0
+        rx_h=$(awk "BEGIN{v=$rx_s; if(v>=1048576)printf\"%.1fMB/s\",v/1048576; else if(v>=1024)printf\"%.0fKB/s\",v/1024; else printf\"%dB/s\",v}")
+        tx_h=$(awk "BEGIN{v=$tx_s; if(v>=1048576)printf\"%.1fMB/s\",v/1048576; else if(v>=1024)printf\"%.0fKB/s\",v/1024; else printf\"%dB/s\",v}")
         printf '%s|%s|%s\n' "$iface" "$rx_h" "$tx_h" > "$NET_TMP"
         sleep 2
     done
@@ -436,11 +447,14 @@ NET_TMP=$(create_temp_file)
 NET_BG_PID=$!
 disown "$NET_BG_PID" 2>/dev/null || true
 
+# Set raw mode AFTER starting background process
+stty -echo -icanon min 0 time 0 2>/dev/null || true
+
 # Initial collect
 _collect
 
 while true; do
-    # Read network from background sampler
+    # Read latest network data
     if [[ -s "$NET_TMP" ]]; then
         NET_IFACE=$(cut -d'|' -f1 "$NET_TMP")
         NET_RX=$(cut -d'|' -f2 "$NET_TMP")
@@ -449,21 +463,17 @@ while true; do
 
     _render
 
-    # Non-blocking key check — 3s timeout for live refresh
-    key=""
-    IFS= read -r -s -n1 -t 3 key 2>/dev/null || true
-    case "$key" in
-        q|Q|$'\x03') break ;;
-    esac
+    # Wait up to 3s checking for keypress every 0.1s
+    local elapsed=0
+    while [[ $elapsed -lt 30 ]]; do
+        key=""
+        IFS= read -r -s -n1 -t 0.1 key 2>/dev/null || true
+        if [[ "$key" == "q" || "$key" == "Q" || "$key" == $'\x03' || "$key" == $'\x1b' ]]; then
+            exit 0
+        fi
+        elapsed=$((elapsed + 1))
+    done
 
-    # Recollect metrics
+    # Recollect
     _collect
 done
-
-# Cleanup background sampler
-kill "$NET_BG_PID" 2>/dev/null || true
-wait "$NET_BG_PID" 2>/dev/null || true
-
-show_cursor
-stty sane 2>/dev/null || true
-echo ""
