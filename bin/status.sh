@@ -1,370 +1,285 @@
 #!/bin/bash
-# MacWash - Status command: live system health dashboard.
-# Refreshes every 3s. Press Q or Ctrl+C to quit.
+# MacWash - Status: live system health dashboard. Q to quit.
 
 export LC_ALL=C LANG=C
-
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 source "$SCRIPT_DIR/lib/core/common.sh"
 
-# ── Argument parsing ──────────────────────────────────────────────────────────
 JSON_MODE=false
 for arg in "$@"; do
-    case "$arg" in
-        --json)    JSON_MODE=true ;;
-        --help|-h) show_help; exit 0 ;;
-    esac
+    case "$arg" in --json) JSON_MODE=true ;; --help|-h) show_help; exit 0 ;; esac
 done
 [[ -t 1 ]] || JSON_MODE=true
 
-# ── Collectors ────────────────────────────────────────────────────────────────
-
-cpu_usage() {
-    local load1 ncpu pct
-    load1=$(sysctl -n vm.loadavg 2>/dev/null | awk '{gsub(/[{}]/,""); print $1+0}')
-    ncpu=$(sysctl -n hw.ncpu 2>/dev/null || echo 1)
-    [[ "$ncpu" =~ ^[0-9]+$ && $ncpu -gt 0 ]] || ncpu=1
-    pct=$(awk "BEGIN{v=$load1/$ncpu*100; if(v>100)v=100; printf \"%.1f\",v}" 2>/dev/null || echo "0.0")
-    echo "${pct:-0.0}"
+# ── Helpers ───────────────────────────────────────────────────────────────────
+_bar() {
+    local p=${1:-0} w=${2:-24} c=${3:-}
+    [[ "$p" =~ ^[0-9]+$ ]] || p=0; [[ $p -gt 100 ]] && p=100
+    local f=$(( p * w / 100 )) e b="" i
+    [[ $f -gt $w ]] && f=$w; e=$(( w - f ))
+    for ((i=0;i<f;i++)); do b+="█"; done
+    for ((i=0;i<e;i++)); do b+="░"; done
+    [[ -n "$c" ]] && printf '%s%s%s' "$c" "$b" "$NC" || printf '%s' "$b"
 }
-
-cpu_load() {
-    sysctl -n vm.loadavg 2>/dev/null | awk '{gsub(/[{}]/,""); printf "%s / %s / %s",$1,$2,$3}'
-}
-
-cpu_cores() {
-    local l p
-    l=$(sysctl -n hw.ncpu 2>/dev/null || echo "?")
-    p=$(sysctl -n hw.physicalcpu 2>/dev/null || echo "?")
-    echo "$l logical, $p physical"
-}
-
-mem_stats() {
-    local mem_total page_size pages_active pages_wired pages_compressed used pct total_gb used_dec
-    mem_total=$(sysctl -n hw.memsize 2>/dev/null || echo 0)
-    page_size=$(vm_stat 2>/dev/null | awk '/page size/{gsub(/[^0-9]/,"",$NF); print $NF+0}')
-    [[ "$page_size" =~ ^[0-9]+$ && $page_size -gt 0 ]] || page_size=16384
-    pages_active=$(vm_stat 2>/dev/null | awk '/Pages active/{gsub(/\./,"",$NF); print $NF+0}')
-    pages_wired=$(vm_stat 2>/dev/null | awk '/Pages wired down/{gsub(/\./,"",$NF); print $NF+0}')
-    pages_compressed=$(vm_stat 2>/dev/null | awk '/Pages occupied by compressor/{gsub(/\./,"",$NF); print $NF+0}')
-    [[ "$pages_active" =~ ^[0-9]+$ ]] || pages_active=0
-    [[ "$pages_wired" =~ ^[0-9]+$ ]] || pages_wired=0
-    [[ "$pages_compressed" =~ ^[0-9]+$ ]] || pages_compressed=0
-    used=$(( (pages_active + pages_wired + pages_compressed) * page_size ))
-    pct=0
-    [[ $mem_total -gt 0 ]] && pct=$(( used * 100 / mem_total ))
-    [[ $pct -gt 100 ]] && pct=100
-    total_gb=$(( mem_total / 1024 / 1024 / 1024 ))
-    used_dec=$(awk "BEGIN{printf \"%.1f\",$used/1073741824}")
-    echo "$used_dec $total_gb $pct"
-}
-
-swap_stats() {
-    local raw used total
-    raw=$(sysctl vm.swapusage 2>/dev/null || echo "")
-    used=$(echo "$raw" | grep -oE 'used = [0-9.]+M' | grep -oE '[0-9.]+' | head -1 || echo "0")
-    total=$(echo "$raw" | grep -oE 'total = [0-9.]+M' | grep -oE '[0-9.]+' | head -1 || echo "0")
-    printf "%.0f %.0f" "${used:-0}" "${total:-0}"
-}
-
-mem_pressure() {
-    memory_pressure -Q 2>/dev/null | grep -oE '[0-9]+%' | head -1 | tr -d '%' || echo "?"
-}
-
-disk_stats() {
-    local target free_kb total_kb pct free_gb total_gb
-    target="/"
-    [[ -d "/System/Volumes/Data" ]] && target="/System/Volumes/Data"
-    free_kb=$(df -Pk "$target" 2>/dev/null | awk 'NR==2{print $4+0}')
-    total_kb=$(df -Pk "$target" 2>/dev/null | awk 'NR==2{print $2+0}')
-    [[ "$total_kb" =~ ^[0-9]+$ && $total_kb -gt 0 ]] || total_kb=1
-    [[ "$free_kb" =~ ^[0-9]+$ ]] || free_kb=0
-    pct=$(( (total_kb - free_kb) * 100 / total_kb ))
-    free_gb=$(( free_kb / 1024 / 1024 ))
-    total_gb=$(( total_kb / 1024 / 1024 ))
-    echo "$free_gb $total_gb $pct"
-}
-
-battery_stats() {
-    local raw pct status time_left ioreg_out design max health_pct cycles temp_raw temp_c
-    raw=$(pmset -g batt 2>/dev/null || echo "")
-    pct=$(echo "$raw" | grep -oE '[0-9]+%' | head -1 | tr -d '%')
-    [[ "$pct" =~ ^[0-9]+$ ]] || pct="?"
-
-    if echo "$raw" | grep -q "AC Power"; then
-        echo "$raw" | grep -qi "charging" && status="Charging" || status="Charged"
-    elif echo "$raw" | grep -qi "discharging"; then
-        status="On Battery"
-        time_left=$(echo "$raw" | grep -oE '[0-9]+:[0-9]+ remaining' | sed 's/ remaining//' | head -1)
-    else
-        status="Unknown"
-    fi
-
-    ioreg_out=$(ioreg -l -n AppleSmartBattery 2>/dev/null | grep -E '"CycleCount" = |"Temperature" = |"DesignCapacity" = |"AppleRawMaxCapacity" = ' || true)
-    design=$(echo "$ioreg_out" | grep '"DesignCapacity"' | awk -F'= ' '{gsub(/ /,"",$NF); print $NF+0}' | head -1)
-    max=$(echo "$ioreg_out" | grep '"AppleRawMaxCapacity"' | awk -F'= ' '{gsub(/ /,"",$NF); print $NF+0}' | head -1)
-    [[ "$design" =~ ^[0-9]+$ && "$max" =~ ^[0-9]+$ && $design -gt 0 ]] && \
-        health_pct=$(awk "BEGIN{printf \"%.0f\",$max/$design*100}") || health_pct="?"
-    cycles=$(echo "$ioreg_out" | grep '"CycleCount"' | awk -F'= ' '{gsub(/ /,"",$NF); print $NF+0}' | head -1)
-    [[ "$cycles" =~ ^[0-9]+$ ]] || cycles="?"
-    temp_raw=$(echo "$ioreg_out" | grep '"Temperature"' | awk -F'= ' '{gsub(/ /,"",$NF); print $NF+0}' | head -1)
-    [[ "$temp_raw" =~ ^[0-9]+$ ]] && temp_c=$(awk "BEGIN{printf \"%.0f\",$temp_raw/100}") || temp_c="?"
-
-    echo "${pct}|${status}|${time_left:-}|${health_pct}|${cycles}|${temp_c}"
-}
-
-net_stats() {
-    local iface line1 line2 rx1 tx1 rx2 tx2 rx_s tx_s rx_h tx_h
-    iface=$(route -n get default 2>/dev/null | awk '/interface:/{print $2}' | head -1)
-    [[ -z "$iface" ]] && iface="en0"
-    line1=$(netstat -ib 2>/dev/null | awk -v i="$iface" '$1==i && $3!~/Link/{print $7,$10; exit}')
-    rx1=$(echo "$line1" | awk '{print $1+0}'); tx1=$(echo "$line1" | awk '{print $2+0}')
-    sleep 1
-    line2=$(netstat -ib 2>/dev/null | awk -v i="$iface" '$1==i && $3!~/Link/{print $7,$10; exit}')
-    rx2=$(echo "$line2" | awk '{print $1+0}'); tx2=$(echo "$line2" | awk '{print $2+0}')
-    rx_s=$(( rx2 - rx1 )); [[ $rx_s -lt 0 ]] && rx_s=0
-    tx_s=$(( tx2 - tx1 )); [[ $tx_s -lt 0 ]] && tx_s=0
-    rx_h=$(awk "BEGIN{v=$rx_s; if(v>=1048576)printf\"%.1f MB/s\",v/1048576; else if(v>=1024)printf\"%.0f KB/s\",v/1024; else printf\"%d B/s\",v}")
-    tx_h=$(awk "BEGIN{v=$tx_s; if(v>=1048576)printf\"%.1f MB/s\",v/1048576; else if(v>=1024)printf\"%.0f KB/s\",v/1024; else printf\"%d B/s\",v}")
-    echo "$iface|$rx_h|$tx_h"
-}
-
-uptime_str() {
-    local boot now elapsed days hours
-    boot=$(sysctl -n kern.boottime 2>/dev/null | sed -n 's/.*sec = \([0-9]*\),.*/\1/p' | tr -d '[:space:]')
-    [[ "$boot" =~ ^[0-9]+$ ]] || boot=0
-    now=$(get_epoch_seconds)
-    elapsed=$(( now - boot )); [[ $elapsed -lt 0 ]] && elapsed=0
-    days=$(( elapsed / 86400 )); hours=$(( (elapsed % 86400) / 3600 ))
-    [[ $days -gt 0 ]] && printf '%dd %dh' "$days" "$hours" || printf '%dh %dm' "$hours" "$(( (elapsed % 3600) / 60 ))"
-}
-
-health_score() {
-    local cpu_i=$1 mem_p=$2 disk_p=$3 swap_u=${4:-0} swap_t=${5:-1}
-    local score=100
-    [[ $cpu_i -gt 90 ]] && score=$((score-25))
-    [[ $cpu_i -gt 70 ]] && score=$((score-10))
-    [[ $mem_p -gt 90 ]] && score=$((score-20))
-    [[ $mem_p -gt 75 ]] && score=$((score-10))
-    [[ $disk_p -gt 95 ]] && score=$((score-20))
-    [[ $disk_p -gt 85 ]] && score=$((score-10))
-    [[ $swap_t -gt 0 ]] && { local sp=$(( swap_u * 100 / swap_t )); [[ $sp -gt 80 ]] && score=$((score-10)); }
-    [[ $score -lt 0 ]] && score=0
-    echo $score
-}
-
-bar() {
-    local pct=${1:-0} width=${2:-24} color=${3:-}
-    [[ "$pct" =~ ^[0-9]+$ ]] || pct=0; [[ $pct -gt 100 ]] && pct=100
-    local filled=$(( pct * width / 100 )) empty b=""
-    [[ $filled -gt $width ]] && filled=$width
-    empty=$(( width - filled ))
-    local i; for ((i=0;i<filled;i++)); do b+="█"; done
-    for ((i=0;i<empty;i++)); do b+="░"; done
-    [[ -n "$color" ]] && printf '%s%s%s' "$color" "$b" "$NC" || printf '%s' "$b"
-}
-
-pct_color() {
-    local p=${1:-0} inv=${2:-false}
+_col() {
+    local p=${1:-0} inv=${2:-}
     [[ "$p" =~ ^[0-9]+$ ]] || p=0
-    if [[ "$inv" == "true" ]]; then
+    if [[ "$inv" == "1" ]]; then
         [[ $p -lt 20 ]] && echo "$RED" || { [[ $p -lt 50 ]] && echo "$YELLOW" || echo "$GREEN"; }
     else
         [[ $p -gt 85 ]] && echo "$RED" || { [[ $p -gt 60 ]] && echo "$YELLOW" || echo "$GREEN"; }
     fi
 }
+_div() { printf '  \033[90m'; printf '─%.0s' {1..62}; printf '\033[0m\n'; }
 
+# ── Collectors ────────────────────────────────────────────────────────────────
+get_cpu() {
+    local l n
+    l=$(sysctl -n vm.loadavg 2>/dev/null | awk '{gsub(/[{}]/,""); print $1+0}')
+    n=$(sysctl -n hw.ncpu 2>/dev/null || echo 1)
+    [[ "$n" =~ ^[0-9]+$ && $n -gt 0 ]] || n=1
+    awk "BEGIN{v=$l/$n*100; if(v>100)v=100; printf \"%.1f\",v}" 2>/dev/null || echo "0.0"
+}
+get_load() { sysctl -n vm.loadavg 2>/dev/null | awk '{gsub(/[{}]/,""); printf "%s/%s/%s",$1,$2,$3}'; }
+get_cores() {
+    local l p
+    l=$(sysctl -n hw.ncpu 2>/dev/null || echo "?")
+    p=$(sysctl -n hw.physicalcpu 2>/dev/null || echo "?")
+    echo "${l}L / ${p}P"
+}
+get_mem() {
+    local mt ps pa pw pc u pct tg ud
+    mt=$(sysctl -n hw.memsize 2>/dev/null || echo 0)
+    ps=$(vm_stat 2>/dev/null | awk '/page size/{gsub(/[^0-9]/,"",$NF); print $NF+0}')
+    [[ "$ps" =~ ^[0-9]+$ && $ps -gt 0 ]] || ps=16384
+    pa=$(vm_stat 2>/dev/null | awk '/Pages active/{gsub(/\./,"",$NF); print $NF+0}')
+    pw=$(vm_stat 2>/dev/null | awk '/Pages wired down/{gsub(/\./,"",$NF); print $NF+0}')
+    pc=$(vm_stat 2>/dev/null | awk '/Pages occupied by compressor/{gsub(/\./,"",$NF); print $NF+0}')
+    [[ "$pa" =~ ^[0-9]+$ ]] || pa=0
+    [[ "$pw" =~ ^[0-9]+$ ]] || pw=0
+    [[ "$pc" =~ ^[0-9]+$ ]] || pc=0
+    u=$(( (pa + pw + pc) * ps ))
+    pct=0; [[ $mt -gt 0 ]] && pct=$(( u * 100 / mt )); [[ $pct -gt 100 ]] && pct=100
+    tg=$(( mt / 1073741824 ))
+    ud=$(awk "BEGIN{printf \"%.1f\",$u/1073741824}")
+    echo "$ud $tg $pct"
+}
+get_swap() {
+    local r u t
+    r=$(sysctl vm.swapusage 2>/dev/null || echo "")
+    u=$(echo "$r" | grep -oE 'used = [0-9.]+M' | grep -oE '[0-9.]+' | head -1 || echo "0")
+    t=$(echo "$r" | grep -oE 'total = [0-9.]+M' | grep -oE '[0-9.]+' | head -1 || echo "0")
+    printf "%.0f %.0f" "${u:-0}" "${t:-0}"
+}
+get_pres() { memory_pressure -Q 2>/dev/null | grep -oE '[0-9]+%' | head -1 | tr -d '%' || echo "?"; }
+get_disk() {
+    local tgt fk tk pct fg tg
+    tgt="/"; [[ -d "/System/Volumes/Data" ]] && tgt="/System/Volumes/Data"
+    fk=$(df -Pk "$tgt" 2>/dev/null | awk 'NR==2{print $4+0}')
+    tk=$(df -Pk "$tgt" 2>/dev/null | awk 'NR==2{print $2+0}')
+    [[ "$tk" =~ ^[0-9]+$ && $tk -gt 0 ]] || tk=1
+    [[ "$fk" =~ ^[0-9]+$ ]] || fk=0
+    pct=$(( (tk - fk) * 100 / tk ))
+    fg=$(( fk / 1048576 )); tg=$(( tk / 1048576 ))
+    echo "$fg $tg $pct"
+}
+get_batt() {
+    local r pct st tl io des mx hp cy tr tc
+    r=$(pmset -g batt 2>/dev/null || echo "")
+    pct=$(echo "$r" | grep -oE '[0-9]+%' | head -1 | tr -d '%'); [[ "$pct" =~ ^[0-9]+$ ]] || pct="?"
+    if echo "$r" | grep -q "AC Power"; then
+        echo "$r" | grep -qi "charging" && st="Charging" || st="Charged"
+    elif echo "$r" | grep -qi "discharging"; then
+        st="On Battery"
+        tl=$(echo "$r" | grep -oE '[0-9]+:[0-9]+ remaining' | sed 's/ remaining//' | head -1)
+    else
+        st="Unknown"
+    fi
+    io=$(ioreg -l -n AppleSmartBattery 2>/dev/null | grep -E '"CycleCount" = |"Temperature" = |"DesignCapacity" = |"AppleRawMaxCapacity" = ' || true)
+    des=$(echo "$io" | grep '"DesignCapacity"' | awk -F'= ' '{gsub(/ /,"",$NF); print $NF+0}' | head -1)
+    mx=$(echo "$io" | grep '"AppleRawMaxCapacity"' | awk -F'= ' '{gsub(/ /,"",$NF); print $NF+0}' | head -1)
+    [[ "$des" =~ ^[0-9]+$ && "$mx" =~ ^[0-9]+$ && $des -gt 0 ]] && hp=$(awk "BEGIN{printf \"%.0f\",$mx/$des*100}") || hp="?"
+    cy=$(echo "$io" | grep '"CycleCount"' | awk -F'= ' '{gsub(/ /,"",$NF); print $NF+0}' | head -1); [[ "$cy" =~ ^[0-9]+$ ]] || cy="?"
+    tr=$(echo "$io" | grep '"Temperature"' | awk -F'= ' '{gsub(/ /,"",$NF); print $NF+0}' | head -1)
+    [[ "$tr" =~ ^[0-9]+$ ]] && tc=$(awk "BEGIN{printf \"%.0f\",$tr/100}") || tc="?"
+    printf '%s|%s|%s|%s|%s|%s' "$pct" "$st" "${tl:-}" "$hp" "$cy" "$tc"
+}
+get_net() {
+    local if1 l1 l2 r1 t1 r2 t2 rs ts rh th
+    if1=$(route -n get default 2>/dev/null | awk '/interface:/{print $2}' | head -1); [[ -z "$if1" ]] && if1="en0"
+    l1=$(netstat -ib 2>/dev/null | awk -v i="$if1" '$1==i && $3!~/Link/{print $7,$10; exit}')
+    r1=$(echo "$l1" | awk '{print $1+0}'); t1=$(echo "$l1" | awk '{print $2+0}')
+    sleep 1
+    l2=$(netstat -ib 2>/dev/null | awk -v i="$if1" '$1==i && $3!~/Link/{print $7,$10; exit}')
+    r2=$(echo "$l2" | awk '{print $1+0}'); t2=$(echo "$l2" | awk '{print $2+0}')
+    rs=$(( r2-r1 )); [[ $rs -lt 0 ]] && rs=0
+    ts=$(( t2-t1 )); [[ $ts -lt 0 ]] && ts=0
+    rh=$(awk "BEGIN{v=$rs; if(v>=1048576)printf\"%.1fMB/s\",v/1048576; else if(v>=1024)printf\"%.0fKB/s\",v/1024; else printf\"%dB/s\",v}")
+    th=$(awk "BEGIN{v=$ts; if(v>=1048576)printf\"%.1fMB/s\",v/1048576; else if(v>=1024)printf\"%.0fKB/s\",v/1024; else printf\"%dB/s\",v}")
+    printf '%s|%s|%s' "$if1" "$rh" "$th"
+}
+get_uptime() {
+    local b n e d h
+    b=$(sysctl -n kern.boottime 2>/dev/null | sed -n 's/.*sec = \([0-9]*\),.*/\1/p' | tr -d '[:space:]')
+    [[ "$b" =~ ^[0-9]+$ ]] || b=0
+    n=$(date +%s 2>/dev/null || echo 0)
+    e=$(( n - b )); [[ $e -lt 0 ]] && e=0
+    d=$(( e/86400 )); h=$(( (e%86400)/3600 ))
+    [[ $d -gt 0 ]] && printf '%dd %dh' "$d" "$h" || printf '%dh %dm' "$h" "$(( (e%3600)/60 ))"
+}
+get_score() {
+    local ci=$1 mp=$2 dp=$3 su=${4:-0} st=${5:-1} s=100
+    [[ $ci -gt 90 ]] && s=$((s-25)); [[ $ci -gt 70 ]] && s=$((s-10))
+    [[ $mp -gt 90 ]] && s=$((s-20)); [[ $mp -gt 75 ]] && s=$((s-10))
+    [[ $dp -gt 95 ]] && s=$((s-20)); [[ $dp -gt 85 ]] && s=$((s-10))
+    [[ $st -gt 0 ]] && { local sp=$(( su*100/st )); [[ $sp -gt 80 ]] && s=$((s-10)); }
+    [[ $s -lt 0 ]] && s=0; echo $s
+}
 top_procs() {
     ps -Acro pid,pcpu,pmem,rss,comm 2>/dev/null | awk 'NR>1 && NF>=5 {
         pid=$1; cpu=$2; mem=$3; rss=$4
         name=""; for(i=5;i<=NF;i++) name=(i==5)?$i:name" "$i
         gsub(/^com\.apple\./,"",name)
-        if(length(name)>28) name=substr(name,1,25)"..."
+        if(length(name)>26) name=substr(name,1,23)"..."
         mb=rss/1024
         n=int(cpu/10); if(n>8)n=8; if(n<0)n=0
         bar=""; for(j=0;j<n;j++) bar=bar"▮"; for(j=n;j<8;j++) bar=bar"▯"
-        printf "  %-6s  %-28s  %5s%%  %5s%%  %6.1fMB  %s\n",pid,name,cpu,mem,mb,bar
+        printf "  %-6s  %-26s  %6s%%  %5s%%  %7.1fMB  %s\n",pid,name,cpu,mem,mb,bar
     }' | head -10
 }
 
-div() { echo -e "  ${GRAY}$(printf '─%.0s' {1..62})${NC}"; }
-
-# ── JSON mode ─────────────────────────────────────────────────────────────────
+# ── JSON ──────────────────────────────────────────────────────────────────────
 if [[ "$JSON_MODE" == "true" ]]; then
-    CPU_PCT=$(cpu_usage)
-    read -r MEM_USED MEM_TOTAL MEM_PCT <<< "$(mem_stats)"
-    read -r SWAP_USED SWAP_TOTAL <<< "$(swap_stats)"
-    read -r DISK_FREE DISK_TOTAL DISK_PCT <<< "$(disk_stats)"
-    BATT_RAW=$(battery_stats)
-    BATT_PCT=$(echo "$BATT_RAW" | cut -d'|' -f1)
-    BATT_STATUS=$(echo "$BATT_RAW" | cut -d'|' -f2)
+    CP=$(get_cpu); read -r MU MT MP <<< "$(get_mem)"; read -r SU ST <<< "$(get_swap)"
+    read -r DF DT DP <<< "$(get_disk)"; BR=$(get_batt); BP=$(echo "$BR"|cut -d'|' -f1); BS=$(echo "$BR"|cut -d'|' -f2)
+    UP=$(get_uptime); CI="${CP%.*}"; [[ "$CI" =~ ^[0-9]+$ ]] || CI=0
+    HS=$(get_score "$CI" "${MP:-0}" "${DP:-0}" "${SU:-0}" "${ST:-1}")
     HOST=$(scutil --get ComputerName 2>/dev/null || hostname)
-    ARCH=$(detect_arch); MACOS=$(sw_vers -productVersion 2>/dev/null || echo "?")
-    UPTIME=$(uptime_str)
-    CPU_I="${CPU_PCT%.*}"; [[ "$CPU_I" =~ ^[0-9]+$ ]] || CPU_I=0
-    HEALTH=$(health_score "$CPU_I" "${MEM_PCT:-0}" "${DISK_PCT:-0}" "${SWAP_USED:-0}" "${SWAP_TOTAL:-1}")
-    cat <<EOF
-{"host":"$HOST","arch":"$ARCH","macos":"$MACOS","uptime":"$UPTIME","health":$HEALTH,
- "cpu":{"pct":$CPU_PCT,"load":"$(cpu_load)"},
- "memory":{"used_gb":$MEM_USED,"total_gb":$MEM_TOTAL,"pct":$MEM_PCT},
- "swap":{"used_mb":${SWAP_USED:-0},"total_mb":${SWAP_TOTAL:-0}},
- "disk":{"free_gb":$DISK_FREE,"total_gb":$DISK_TOTAL,"pct":$DISK_PCT},
- "battery":{"pct":"$BATT_PCT","status":"$BATT_STATUS"}}
-EOF
+    printf '{"host":"%s","macos":"%s","uptime":"%s","health":%s,"cpu":{"pct":%s},"memory":{"used_gb":%s,"total_gb":%s,"pct":%s},"disk":{"free_gb":%s,"pct":%s},"battery":{"pct":"%s","status":"%s"}}\n' \
+        "$HOST" "$(sw_vers -productVersion 2>/dev/null || echo ?)" "$UP" "$HS" "$CP" "$MU" "$MT" "$MP" "$DF" "$DP" "$BP" "$BS"
     exit 0
 fi
 
 # ── Live TUI ──────────────────────────────────────────────────────────────────
 HOST=$(scutil --get ComputerName 2>/dev/null || hostname)
-ARCH=$(detect_arch)
-MACOS=$(sw_vers -productVersion 2>/dev/null || echo "?")
+ARCH=$(detect_arch); MACOS=$(sw_vers -productVersion 2>/dev/null || echo "?")
+NET_IF="en0"; NET_RX="--"; NET_TX="--"
 
-render() {
-    local CPU_PCT=$1 CPU_I=$2 MEM_USED=$3 MEM_TOTAL=$4 MEM_PCT=$5
-    local SWAP_USED=$6 SWAP_TOTAL=$7 MEM_PRES=$8
-    local DISK_FREE=$9 DISK_TOTAL=${10} DISK_PCT=${11}
-    local BATT_PCT=${12} BATT_STATUS=${13} BATT_TIME=${14}
-    local BATT_HEALTH=${15} BATT_CYCLES=${16} BATT_TEMP=${17}
-    local NET_IFACE=${18} NET_RX=${19} NET_TX=${20}
-    local UPTIME=${21} HEALTH=${22} TS=${23}
-
-    printf '\033[H\033[2J'
-
-    local hc="$GREEN"; [[ $HEALTH -lt 70 ]] && hc="$YELLOW"; [[ $HEALTH -lt 50 ]] && hc="$RED"
-    local hl="Excellent"; [[ $HEALTH -lt 90 ]] && hl="Good"; [[ $HEALTH -lt 70 ]] && hl="Fair"; [[ $HEALTH -lt 50 ]] && hl="Poor"
-
-    echo -e "${CYAN_BOLD}  ◈ MacWash  Status${NC}  ${hc}● Health $HEALTH  $hl${NC}"
-    echo -e "  ${GRAY}$HOST  ·  $ARCH  ·  macOS $MACOS  ·  up $UPTIME${NC}"
-    div; echo ""
-
-    # CPU
-    local cc; cc=$(pct_color "$CPU_I")
-    printf '  %-8s' "${CYAN_BOLD}⚙ CPU${NC}"
-    printf '  %s  %s%s%%%s   %sLoad: %s%s\n' "$(bar "$CPU_I" 24 "$cc")" "$cc" "$CPU_PCT" "$NC" "$GRAY" "$(cpu_load)" "$NC"
-    printf '  %sCores: %s%s\n\n' "$GRAY" "$(cpu_cores)" "$NC"
-
-    # Memory
-    local mc; mc=$(pct_color "$MEM_PCT")
-    local sp=0; [[ ${SWAP_TOTAL:-0} -gt 0 ]] && sp=$(( SWAP_USED * 100 / SWAP_TOTAL ))
-    local sc; sc=$(pct_color "$sp")
-    printf '  %-8s' "${CYAN_BOLD}▦ Memory${NC}"
-    printf '  %s  %s%s%%%s   %s%s / %s GB  ·  pressure %s%%%s\n' \
-        "$(bar "$MEM_PCT" 24 "$mc")" "$mc" "$MEM_PCT" "$NC" "$GRAY" "$MEM_USED" "$MEM_TOTAL" "$MEM_PRES" "$NC"
-    printf '  %sSwap%s    %s  %s%s MB / %s MB%s\n\n' \
-        "$GRAY" "$NC" "$(bar "$sp" 24 "$sc")" "$sc" "$SWAP_USED" "$SWAP_TOTAL" "$NC"
-
-    # Disk
-    local dc; dc=$(pct_color "$DISK_PCT")
-    printf '  %-8s' "${CYAN_BOLD}▤ Disk${NC}"
-    printf '  %s  %s%s%%%s   %s%s GB free of %s GB%s\n\n' \
-        "$(bar "$DISK_PCT" 24 "$dc")" "$dc" "$DISK_PCT" "$NC" "$GRAY" "$DISK_FREE" "$DISK_TOTAL" "$NC"
-
-    # Battery
-    local bi=0; [[ "$BATT_PCT" =~ ^[0-9]+$ ]] && bi=$BATT_PCT
-    local bc; bc=$(pct_color "$bi" true)
-    local bx=""; [[ -n "${BATT_TIME:-}" ]] && bx="  ${GRAY}${BATT_TIME} left${NC}"
-    printf '  %-8s' "${CYAN_BOLD}⚡ Battery${NC}"
-    printf '  %s  %s%s%%%s   %s%s%s%s\n' \
-        "$(bar "$bi" 24 "$bc")" "$bc" "$BATT_PCT" "$NC" "$GRAY" "$BATT_STATUS" "$NC" "$bx"
-    local bd=""
-    [[ "${BATT_HEALTH:-?}" != "?" ]] && bd+="health ${BATT_HEALTH}%"
-    [[ "${BATT_CYCLES:-?}" != "?" ]] && bd+="  ·  ${BATT_CYCLES} cycles"
-    [[ "${BATT_TEMP:-?}" != "?" ]] && bd+="  ·  ${BATT_TEMP}°C"
-    [[ -n "$bd" ]] && echo -e "           ${GRAY}${bd}${NC}"
-    echo ""
-
-    # Network
-    printf '  %-8s' "${CYAN_BOLD}⇅ Network${NC}"
-    printf '  %s↓ %s  ↑ %s  [%s]%s\n\n' "$GRAY" "$NET_RX" "$NET_TX" "$NET_IFACE" "$NC"
-
-    # Processes
-    div
-    printf '  %s%-6s  %-28s  %6s  %6s  %7s  %s%s\n' \
-        "${CYAN_BOLD}" "PID" "Process" "CPU" "MEM" "Memory" "Activity" "${NC}"
-    echo -e "  ${GRAY}$(printf '─%.0s' {1..70})${NC}"
-    top_procs
-    echo ""
-    div
-    printf '  %sLive · Q to quit · Updated: %s%s\n' "$GRAY" "$TS" "$NC"
-    printf '\033[J'
-}
-
-# ── Main ──────────────────────────────────────────────────────────────────────
-printf '\033[2J\033[H'
-printf '\033[?25l'  # hide cursor
-
-# Trap for clean exit
-_status_exit() {
-    printf '\033[?25h'  # show cursor
-    printf '\033[2J\033[H'
+# Clean exit handler
+_quit() {
+    printf '\033[?25h'
+    tput rmcup 2>/dev/null || printf '\033[2J\033[H'
     stty sane 2>/dev/null || true
+    [[ -n "${NETBG:-}" ]] && kill "$NETBG" 2>/dev/null || true
+    [[ -n "${NETTMP:-}" ]] && rm -f "$NETTMP" 2>/dev/null || true
     cleanup_temp_files 2>/dev/null || true
-    echo ""
     exit 0
 }
-trap _status_exit INT TERM EXIT
+trap '_quit' INT TERM
 
-# Get initial network (takes 1s)
-NET_RAW=$(net_stats)
-NET_IFACE=$(echo "$NET_RAW" | cut -d'|' -f1)
-NET_RX=$(echo "$NET_RAW" | cut -d'|' -f2)
-NET_TX=$(echo "$NET_RAW" | cut -d'|' -f3)
+# Enter alternate screen so original terminal is preserved
+tput smcup 2>/dev/null || true
+printf '\033[?25l'
 
-# Background network updater
-NET_TMP=$(mktemp /tmp/macwash_net.XXXXXX)
-(
-    while true; do
-        r=$(net_stats 2>/dev/null) && printf '%s\n' "$r" > "$NET_TMP"
-        sleep 2
-    done
-) &
-NET_BG=$!
-disown $NET_BG 2>/dev/null || true
+# Background net sampler
+NETTMP=$(mktemp /tmp/mw_net.XXXXXX 2>/dev/null || echo "/tmp/mw_net_$$")
+( while true; do r=$(get_net 2>/dev/null) && echo "$r" > "$NETTMP"; sleep 3; done ) &
+NETBG=$!
+disown $NETBG 2>/dev/null || true
 
-# Main loop — pure timed loop, no stty tricks
+# Main live loop
 while true; do
-    # Collect all metrics
-    CPU_PCT=$(cpu_usage)
-    CPU_I="${CPU_PCT%.*}"; [[ "$CPU_I" =~ ^[0-9]+$ ]] || CPU_I=0
-    read -r MEM_USED MEM_TOTAL MEM_PCT <<< "$(mem_stats)"
-    read -r SWAP_USED SWAP_TOTAL <<< "$(swap_stats)"
-    MEM_PRES=$(mem_pressure)
-    read -r DISK_FREE DISK_TOTAL DISK_PCT <<< "$(disk_stats)"
-    BATT_RAW=$(battery_stats)
-    BATT_PCT=$(echo "$BATT_RAW" | cut -d'|' -f1)
-    BATT_STATUS=$(echo "$BATT_RAW" | cut -d'|' -f2)
-    BATT_TIME=$(echo "$BATT_RAW" | cut -d'|' -f3)
-    BATT_HEALTH=$(echo "$BATT_RAW" | cut -d'|' -f4)
-    BATT_CYCLES=$(echo "$BATT_RAW" | cut -d'|' -f5)
-    BATT_TEMP=$(echo "$BATT_RAW" | cut -d'|' -f6)
-    UPTIME=$(uptime_str)
-    HEALTH=$(health_score "$CPU_I" "${MEM_PCT:-0}" "${DISK_PCT:-0}" "${SWAP_USED:-0}" "${SWAP_TOTAL:-1}")
+    # Collect
+    CP=$(get_cpu); CI="${CP%.*}"; [[ "$CI" =~ ^[0-9]+$ ]] || CI=0
+    CL=$(get_load); CC=$(get_cores)
+    read -r MU MT MP <<< "$(get_mem)"
+    read -r SU ST <<< "$(get_swap)"
+    PR=$(get_pres)
+    read -r DF DT DP <<< "$(get_disk)"
+    BR=$(get_batt)
+    BP=$(echo "$BR"|cut -d'|' -f1); BS=$(echo "$BR"|cut -d'|' -f2)
+    BT=$(echo "$BR"|cut -d'|' -f3); BH=$(echo "$BR"|cut -d'|' -f4)
+    BC=$(echo "$BR"|cut -d'|' -f5); BTC=$(echo "$BR"|cut -d'|' -f6)
+    UP=$(get_uptime)
+    [[ "$MP" =~ ^[0-9]+$ ]] || MP=0; [[ "$DP" =~ ^[0-9]+$ ]] || DP=0
+    SP=0; [[ "${ST:-0}" =~ ^[0-9]+$ && ${ST:-0} -gt 0 ]] && SP=$(( ${SU:-0}*100/${ST:-1} ))
+    HS=$(get_score "$CI" "$MP" "$DP" "${SU:-0}" "${ST:-1}")
     TS=$(date '+%H:%M:%S' 2>/dev/null || echo "")
 
-    # Read latest network
-    if [[ -s "$NET_TMP" ]]; then
-        NET_IFACE=$(cut -d'|' -f1 "$NET_TMP")
-        NET_RX=$(cut -d'|' -f2 "$NET_TMP")
-        NET_TX=$(cut -d'|' -f3 "$NET_TMP")
+    # Network from bg sampler
+    if [[ -s "$NETTMP" ]]; then
+        NET_IF=$(cut -d'|' -f1 "$NETTMP")
+        NET_RX=$(cut -d'|' -f2 "$NETTMP")
+        NET_TX=$(cut -d'|' -f3 "$NETTMP")
     fi
 
-    render "$CPU_PCT" "$CPU_I" \
-        "${MEM_USED:-0}" "${MEM_TOTAL:-16}" "${MEM_PCT:-0}" \
-        "${SWAP_USED:-0}" "${SWAP_TOTAL:-0}" "${MEM_PRES:-?}" \
-        "${DISK_FREE:-0}" "${DISK_TOTAL:-0}" "${DISK_PCT:-0}" \
-        "${BATT_PCT:-?}" "${BATT_STATUS:-?}" "${BATT_TIME:-}" \
-        "${BATT_HEALTH:-?}" "${BATT_CYCLES:-?}" "${BATT_TEMP:-?}" \
-        "${NET_IFACE:-en0}" "${NET_RX:---}" "${NET_TX:---}" \
-        "$UPTIME" "$HEALTH" "$TS"
+    # Render
+    printf '\033[H'
 
-    # Wait 3s — check for Q keypress using /dev/tty
+    # Header
+    local HC="$GREEN"; [[ $HS -lt 70 ]] && HC="$YELLOW"; [[ $HS -lt 50 ]] && HC="$RED"
+    local HL="Excellent"; [[ $HS -lt 90 ]] && HL="Good"; [[ $HS -lt 70 ]] && HL="Fair"; [[ $HS -lt 50 ]] && HL="Poor"
+    printf '\033[2K'; echo -e "${CYAN_BOLD}  ◈ MacWash  Status${NC}  ${HC}● Health $HS  $HL${NC}"
+    printf '\033[2K'; echo -e "  ${GRAY}$HOST  ·  $ARCH  ·  macOS $MACOS  ·  up $UP${NC}"
+    printf '\033[2K'; _div; printf '\033[2K\n'
+
+    # CPU
+    CC1=$(_col "$CI"); printf '\033[2K'
+    printf '  %-8s  %s  %s%s%%%s   %sLoad: %s  Cores: %s%s\n' \
+        "${CYAN_BOLD}⚙ CPU${NC}" "$(_bar "$CI" 24 "$CC1")" "$CC1" "$CP" "$NC" "$GRAY" "$CL" "$CC" "$NC"
+    printf '\033[2K\n'
+
+    # Memory
+    MC=$(_col "$MP"); SC=$(_col "$SP"); printf '\033[2K'
+    printf '  %-8s  %s  %s%s%%%s   %s%s/%s GB  pressure %s%%%s\n' \
+        "${CYAN_BOLD}▦ Mem${NC}" "$(_bar "$MP" 24 "$MC")" "$MC" "$MP" "$NC" "$GRAY" "$MU" "$MT" "$PR" "$NC"
+    printf '\033[2K'
+    printf '  %-8s  %s  %s%s/%s MB%s\n' "${GRAY}Swap${NC}" "$(_bar "$SP" 24 "$SC")" "$SC" "${SU:-0}" "${ST:-0}" "$NC"
+    printf '\033[2K\n'
+
+    # Disk
+    DC=$(_col "$DP"); printf '\033[2K'
+    printf '  %-8s  %s  %s%s%%%s   %s%s GB free of %s GB%s\n' \
+        "${CYAN_BOLD}▤ Disk${NC}" "$(_bar "$DP" 24 "$DC")" "$DC" "$DP" "$NC" "$GRAY" "$DF" "$DT" "$NC"
+    printf '\033[2K\n'
+
+    # Battery
+    BI=0; [[ "$BP" =~ ^[0-9]+$ ]] && BI=$BP
+    BC2=$(_col "$BI" 1); BX=""; [[ -n "${BT:-}" ]] && BX="  ${GRAY}${BT} left${NC}"
+    printf '\033[2K'
+    printf '  %-8s  %s  %s%s%%%s   %s%s%s%s\n' \
+        "${CYAN_BOLD}⚡ Batt${NC}" "$(_bar "$BI" 24 "$BC2")" "$BC2" "$BP" "$NC" "$GRAY" "$BS" "$NC" "$BX"
+    BD=""
+    [[ "${BH:-?}" != "?" ]] && BD+="health ${BH}%"
+    [[ "${BC:-?}" != "?" ]] && BD+="  ·  ${BC} cycles"
+    [[ "${BTC:-?}" != "?" ]] && BD+="  ·  ${BTC}°C"
+    printf '\033[2K'; [[ -n "$BD" ]] && echo -e "           ${GRAY}${BD}${NC}" || echo ""
+    printf '\033[2K\n'
+
+    # Network
+    printf '\033[2K'
+    printf '  %-8s  %s↓ %s  ↑ %s  [%s]%s\n' \
+        "${CYAN_BOLD}⇅ Net${NC}" "$GRAY" "$NET_RX" "$NET_TX" "$NET_IF" "$NC"
+    printf '\033[2K\n'
+
+    # Processes
+    printf '\033[2K'; _div
+    printf '\033[2K'; printf '  %s%-6s  %-26s  %7s  %6s  %8s  %s%s\n' \
+        "${CYAN_BOLD}" "PID" "Process" "CPU" "MEM" "Memory" "Activity" "${NC}"
+    printf '\033[2K'; printf '  \033[90m'; printf '─%.0s' {1..68}; printf '\033[0m\n'
+    top_procs | while IFS= read -r line; do printf '\033[2K%s\n' "$line"; done
+    printf '\033[2K\n'
+    printf '\033[2K'; _div
+    printf '\033[2K'; printf '  \033[90mQ to quit  ·  Live refresh  ·  %s\033[0m\n' "$TS"
+    printf '\033[J'
+
+    # Wait 3s, check Q every 0.1s via /dev/tty
     i=0
     while [[ $i -lt 30 ]]; do
+        ch=""
         if read -r -s -n1 -t 0.1 ch < /dev/tty 2>/dev/null; then
-            case "$ch" in
-                q|Q) kill $NET_BG 2>/dev/null; rm -f "$NET_TMP"; _status_exit ;;
-            esac
+            case "$ch" in q|Q|$'\x03'|$'\x1b') _quit ;; esac
         fi
-        i=$(( i + 1 ))
+        i=$(( i+1 ))
     done
 done
