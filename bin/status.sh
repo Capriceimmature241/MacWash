@@ -235,7 +235,7 @@ MAX_PROCS=10
 _quit() {
     printf '\033[?25h'
     tput rmcup 2>/dev/null || printf '\033[2J\033[H'
-    stty sane 2>/dev/null || true
+    stty sane </dev/tty 2>/dev/null || stty sane 2>/dev/null || true
     [[ -n "${NETBG:-}" ]] && kill "$NETBG" 2>/dev/null || true
     [[ -n "${NETTMP:-}" ]] && rm -f "$NETTMP" 2>/dev/null || true
     rm -f /tmp/mw_procs_$$ 2>/dev/null || true
@@ -269,10 +269,8 @@ stty sane 2>/dev/null || true  # Reset terminal first
 tput smcup 2>/dev/null || true
 printf '\033[?25l'
 
-# Configure terminal for raw input
-if [[ -t 0 ]]; then
-    stty -echo -icanon min 0 time 1 2>/dev/null || true
-fi
+# Configure terminal for raw input - ALWAYS configure on /dev/tty
+stty -echo -icanon min 0 time 1 </dev/tty 2>/dev/null || true
 
 # Background net sampler
 NETTMP=$(mktemp /tmp/mw_net.XXXXXX 2>/dev/null || echo "/tmp/mw_net_$$")

@@ -4,6 +4,14 @@ All notable changes to MacWash are documented here.
 
 ---
 
+## [v1.0.5] — 2026-07-27
+
+### Fixed
+- **Q and K keys now work** when Status is launched from main menu
+- Terminal input configured directly on /dev/tty regardless of stdin state
+
+---
+
 ## [v1.0.4] — 2026-07-27
 
 ### Fixed
